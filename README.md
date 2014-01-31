@@ -1,0 +1,4 @@
+dirty-validators
+================
+
+Agnostic validators
