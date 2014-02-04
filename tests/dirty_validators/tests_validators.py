@@ -264,12 +264,33 @@ class TestIPAddress(TestCase):
         self.assertTrue(self.validator.is_valid("2001:0db8:85a3::8a2e:0370:7334"))
         self.assertDictEqual(self.validator.messages, {})
 
+    def test_validate_str_ipv6_reduced_localhost_success(self):
+        self.validator = IPAddress(ipv4=False, ipv6=True)
+        self.assertTrue(self.validator.is_valid("::1"))
+        self.assertDictEqual(self.validator.messages, {})
+
     def test_validate_str_ipv6_fail(self):
         self.validator = IPAddress(ipv4=False, ipv6=True)
         self.assertFalse(self.validator.is_valid("2001:0db8:85a3:08d3:1319:8a2e:0370:733T"))
         self.assertDictEqual(self.validator.messages,
                              {IPAddress.NOT_IP_ADDRESS:
                               "'2001:0db8:85a3:08d3:1319:8a2e:0370:733T' does " +
+                              "not appear to be a valid IP address. Allowed ipv6"})
+
+    def test_validate_str_ipv6_too_large_fail(self):
+        self.validator = IPAddress(ipv4=False, ipv6=True)
+        self.assertFalse(self.validator.is_valid("2001:0db8:85a3:08d3:1319:8a2e:0370:7333:3333:3333"))
+        self.assertDictEqual(self.validator.messages,
+                             {IPAddress.NOT_IP_ADDRESS:
+                              "'2001:0db8:85a3:08d3:1319:8a2e:0370:7333:3333:3333' does " +
+                              "not appear to be a valid IP address. Allowed ipv6"})
+
+    def test_validate_str_ipv6_too_big_fail(self):
+        self.validator = IPAddress(ipv4=False, ipv6=True)
+        self.assertFalse(self.validator.is_valid("2001:0db8:85a3:08d3:1319:8a2e:0370:7333FFF"))
+        self.assertDictEqual(self.validator.messages,
+                             {IPAddress.NOT_IP_ADDRESS:
+                              "'2001:0db8:85a3:08d3:1319:8a2e:0370:7333FFF' does " +
                               "not appear to be a valid IP address. Allowed ipv6"})
 
     def test_validate_str_ipv4_not_allowed_fail(self):
