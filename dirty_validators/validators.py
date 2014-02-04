@@ -39,7 +39,7 @@ class BaseValidator:
         placeholders = {"value": value}
         placeholders.update(kwargs)
         placeholders.update(self.message_values)
-        
+
         self.messages[code] = message.safe_substitute(placeholders)
 
     def is_valid(self, value, *args, **kwargs):
