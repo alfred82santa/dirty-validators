@@ -14,35 +14,33 @@ class BaseValidator:
     def __init__(self, error_code_map=None, error_messages=None,
                  message_values=None, *args, **kwargs):
 
-        self.error_code_map = {key: new_key for key, new_key in self.error_code_map.items()}
+        self.error_code_map = self.error_code_map.copy()
         if error_code_map:
             self.error_code_map = error_code_map
 
-        self.error_messages = {key: message for key, message in self.error_messages.items()}
+        self.error_messages = self.error_messages.copy()
         if error_messages:
             self.error_messages.update(error_messages)
 
-        self.message_values = {placeholder: value for placeholder, value in self.message_values.items()}
+        self.message_values = self.message_values.copy()
         if message_values:
             self.message_values.update(message_values)
 
         self.messages = {}
 
     def error(self, error_code, value, **kwargs):
-        try:
-            code = self.error_code_map[error_code]
-        except KeyError:
-            code = error_code
+        code = self.error_code_map.get(error_code, error_code)
 
         try:
             message = Template(self.error_messages[code])
         except KeyError:
             message = Template(self.error_messages[error_code])
 
-        message = Template(message.safe_substitute(value=value))
-        message = Template(message.safe_substitute(**kwargs))
+        placeholders = {"value": value}
+        placeholders.update(kwargs)
+        placeholders.update(self.message_values)
 
-        self.messages[code] = message.safe_substitute(self.message_values)
+        self.messages[code] = message.safe_substitute(placeholders)
 
     def is_valid(self, value, *args, **kwargs):
         self.messages = {}
@@ -252,14 +250,7 @@ class IPAddress(BaseValidator):
         self.ipv4 = ipv4
         self.ipv6 = ipv6
 
-        types = []
-        if self.ipv4:
-            types.append('ipv4')
-
-        if self.ipv6:
-            types.append('ipv6')
-
-        self.message_values.update({'types': ' and '.join(types)})
+        self.message_values.update({'types': ' and '.join([x for x in ('ipv4', 'ipv6') if getattr(self, x)])})
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if self.check_ipv4(value):
@@ -294,10 +285,7 @@ class IPAddress(BaseValidator):
         except AttributeError:
             return False
 
-        if len(parts) > 8:
-            return False
-
-        if len(parts) < 2:
+        if not 2 <= len(parts) <= 8:
             return False
 
         num_blank = 0
