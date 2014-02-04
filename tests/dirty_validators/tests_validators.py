@@ -293,6 +293,14 @@ class TestIPAddress(TestCase):
                               "'2001:0db8:85a3:08d3:1319:8a2e:0370:7333FFF' does " +
                               "not appear to be a valid IP address. Allowed ipv6"})
 
+    def test_validate_str_ipv6_bad_white_spaces_fail(self):
+        self.validator = IPAddress(ipv4=False, ipv6=True)
+        self.assertFalse(self.validator.is_valid(":0db8:"))
+        self.assertDictEqual(self.validator.messages,
+                             {IPAddress.NOT_IP_ADDRESS:
+                              "':0db8:' does " +
+                              "not appear to be a valid IP address. Allowed ipv6"})
+
     def test_validate_str_ipv4_not_allowed_fail(self):
         self.validator = IPAddress(ipv4=False, ipv6=True)
         self.assertFalse(self.validator.is_valid("192.168.2.233"))
