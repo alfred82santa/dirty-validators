@@ -181,6 +181,16 @@ class TestContextField(TestCase):
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertIsNone(get_field_value_from_context('fieldname2.3.qwq', contexts))
 
+    def test_get_first_context_dict_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {1: "asase", 2: "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {1: "asase11", 2: "fuii11"}}]
+        self.assertEqual(get_field_value_from_context('fieldname2.1', contexts), "asase11")
+
+    def test_get_second_context_dict_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {1: "asase", 2: "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {1: "asase11", 2: "fuii11"}}]
+        self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "asase")
+
 
 class TestIfField(TestCase):
 
