@@ -16,7 +16,7 @@ class Chain(BaseValidator):
         super(Chain, self).__init__(*args, **kwargs)
 
         self.stop_on_fail = stop_on_fail
-        self.validators = validators[:]
+        self.validators = validators.copy()
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
