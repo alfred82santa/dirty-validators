@@ -28,6 +28,10 @@ class BaseValidator:
 
         self.messages = {}
 
+    def error_no_template(self, error_code):
+        code = self.error_code_map.get(error_code, error_code)
+        self.messages[code] = self.error_messages.get(code) or self.error_messages[error_code]
+
     def error(self, error_code, value, **kwargs):
         code = self.error_code_map.get(error_code, error_code)
 
@@ -418,5 +422,75 @@ class NoneOf(BaseValidator):
     def _internal_is_valid(self, value, *args, **kwargs):
         if value in self.values:
             self.error(self.IN_LIST, value, values=self.values_formatter(self.values))
+            return False
+        return True
+
+
+class Empty(BaseValidator):
+
+    """
+    Compares the incoming value with an empty one
+    """
+    EMPTY = 'Empty'
+
+    error_messages = {EMPTY: "Value must be empty"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value:
+            self.error_no_template(self.EMPTY)
+            return False
+        return True
+
+
+class NotEmpty(BaseValidator):
+
+    """
+    Raise error when it is empty
+    """
+    NOT_EMPTY = 'notEmpty'
+
+    error_messages = {NOT_EMPTY: "Value is required and can not be empty"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if not value:
+            self.error_no_template(self.NOT_EMPTY)
+            return False
+        return True
+
+
+class IsNone(BaseValidator):
+
+    """
+    Raise error if it is not None
+    """
+
+    NONE = 'None'
+
+    error_messages = {NONE: "Value must be None"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value is not None:
+            self.error_no_template(self.NONE)
+            return False
+        return True
+
+
+class IsNotNone(BaseValidator):
+
+    """
+    Raise error if it is None
+    """
+
+    NOT_NONE = 'notNone'
+
+    error_messages = {NOT_NONE: "Value must not be None"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value is None:
+            self.error_no_template(self.NOT_NONE)
             return False
         return True
