@@ -28,10 +28,6 @@ class BaseValidator:
 
         self.messages = {}
 
-    def error_no_template(self, error_code):
-        code = self.error_code_map.get(error_code, error_code)
-        self.messages[code] = self.error_messages.get(code) or self.error_messages[error_code]
-
     def error(self, error_code, value, **kwargs):
         code = self.error_code_map.get(error_code, error_code)
 
@@ -426,19 +422,19 @@ class NoneOf(BaseValidator):
         return True
 
 
-class Empty(BaseValidator):
+class IsEmpty(BaseValidator):
 
     """
     Compares the incoming value with an empty one
     """
     EMPTY = 'Empty'
 
-    error_messages = {EMPTY: "Value must be empty"}
+    error_messages = {EMPTY: "'$value' must be empty"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
 
         if value:
-            self.error_no_template(self.EMPTY)
+            self.error(self.EMPTY, value)
             return False
         return True
 
@@ -450,12 +446,12 @@ class NotEmpty(BaseValidator):
     """
     NOT_EMPTY = 'notEmpty'
 
-    error_messages = {NOT_EMPTY: "Value is required and can not be empty"}
+    error_messages = {NOT_EMPTY: "'$value' is required and can not be empty"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
 
         if not value:
-            self.error_no_template(self.NOT_EMPTY)
+            self.error(self.NOT_EMPTY, value)
             return False
         return True
 
@@ -468,17 +464,17 @@ class IsNone(BaseValidator):
 
     NONE = 'None'
 
-    error_messages = {NONE: "Value must be None"}
+    error_messages = {NONE: "'$value' must be None"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
 
         if value is not None:
-            self.error_no_template(self.NONE)
+            self.error(self.NONE, value)
             return False
         return True
 
 
-class IsNotNone(BaseValidator):
+class NotNone(BaseValidator):
 
     """
     Raise error if it is None
@@ -491,6 +487,6 @@ class IsNotNone(BaseValidator):
     def _internal_is_valid(self, value, *args, **kwargs):
 
         if value is None:
-            self.error_no_template(self.NOT_NONE)
+            self.error(self.NOT_NONE, value)
             return False
         return True
