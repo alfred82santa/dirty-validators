@@ -130,13 +130,10 @@ def get_field_value_from_context(field_name, context_list):
 
     try:
         field_value = context_list[context_index]
-    except IndexError:
-        return None
 
-    try:
         while len(field_path):
             field = field_path.pop(0)
-            if isinstance(field_value, (list, tuple, set)):
+            if isinstance(field_value, (list, tuple)):
                 if field.isdigit():
                     field = int(field)
                 field_value = field_value[field]
