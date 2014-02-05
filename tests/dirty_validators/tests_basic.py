@@ -1,6 +1,6 @@
 from unittest import TestCase
-from dirty_validators.validators import (BaseValidator, EqualTo, NotEqualTo, Length, NumberRange,
-                                         Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf)
+from dirty_validators.basic import (BaseValidator, EqualTo, NotEqualTo, Length, NumberRange,
+                                    Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf)
 import re
 
 

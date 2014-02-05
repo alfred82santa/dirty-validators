@@ -16,7 +16,7 @@ class BaseValidator:
 
         self.error_code_map = self.error_code_map.copy()
         if error_code_map:
-            self.error_code_map = error_code_map
+            self.error_code_map.update(error_code_map)
 
         self.error_messages = self.error_messages.copy()
         if error_messages:
