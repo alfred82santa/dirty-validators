@@ -131,61 +131,62 @@ class TestSomeItems(TestCase):
                              {SomeItems.TOO_MANY_VALID_ITEMS: "Too many items pass validation",
                               4: {Length.TOO_SHORT: "'sd' is less than 4 unit length"},
                               3: {Length.TOO_LONG: "'wewwwwww' is more than 6 unit length"}})
-                              
-                              
+
+
 class TestContextField(TestCase):
+
     def test_get_first_context_root_field(self):
         contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
         self.assertEqual(get_field_value_from_context('fieldname1', contexts), "bbb")
-        
+
     def test_get_second_context_root_field(self):
         contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
         self.assertEqual(get_field_value_from_context('<context>.fieldname1', contexts), "asa")
-        
+
     def test_get_third_context_root_field(self):
         contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
         self.assertIsNone(get_field_value_from_context('<context>.<context>.fieldname1', contexts))
-    
+
     def test_get_first_context_embeded_field(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": { "fieldname3": "fuii"}}, 
-                    {"fieldname1": "bbb", "fieldname2": { "fieldname3": "oouch"}}]
+        contexts = [{"fieldname1": "asa", "fieldname2": {"fieldname3": "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {"fieldname3": "oouch"}}]
         self.assertEqual(get_field_value_from_context('fieldname2.fieldname3', contexts), "oouch")
-        
+
     def test_get_second_context_embeded_field(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": { "fieldname3": "fuii"}}, 
-                    {"fieldname1": "bbb", "fieldname2": { "fieldname3": "oouch"}}]
+        contexts = [{"fieldname1": "asa", "fieldname2": {"fieldname3": "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {"fieldname3": "oouch"}}]
         self.assertEqual(get_field_value_from_context('<context>.fieldname2.fieldname3', contexts), "fuii")
-        
+
     def test_get_embeded_field_fail(self):
         contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
         self.assertIsNone(get_field_value_from_context('fieldname2.fieldname3', contexts))
-        
+
     def test_get_first_context_list_field(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]}, 
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertEqual(get_field_value_from_context('fieldname2.1', contexts), "fuii11")
-        
+
     def test_get_second_context_list_field(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]}, 
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "fuii")
-        
+
     def test_get_list_field_fail(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]}, 
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertIsNone(get_field_value_from_context('fieldname2.3', contexts))
-        
+
     def test_get_immutable_field_fail(self):
-        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]}, 
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertIsNone(get_field_value_from_context('fieldname2.3.qwq', contexts))
-        
+
 
 class TestIfField(TestCase):
 
     def setUp(self):
-        self.validator = IfField(validator=Length(min=4, max=6), 
-                                 field_name='fieldname1', 
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
                                  field_validator=Length(min=1, max=2))
 
     def tearDown(self):
@@ -194,13 +195,13 @@ class TestIfField(TestCase):
     def test_validate_success(self):
         self.assertTrue(self.validator.is_valid('abcd', context=[{'fieldname1': 'a'}]), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
-        
+
     def test_no_validate_success(self):
         self.assertTrue(self.validator.is_valid('a', context=[{'fieldname1': 'abcd'}]), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
-        
+
     def test_validate_fail(self):
         self.assertFalse(self.validator.is_valid('abcdefg', context=[{'fieldname1': 'a'}]), self.validator.messages)
-        self.assertDictEqual(self.validator.messages, 
+        self.assertDictEqual(self.validator.messages,
                              {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'a'.",
                               Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})

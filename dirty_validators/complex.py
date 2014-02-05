@@ -120,19 +120,20 @@ class SomeItems(ListValidator):
 
         return True
 
+
 def get_field_value_from_context(field_name, context_list):
     field_path = field_name.split('.')
     context_index = -1
     while field_path[0] == '<context>':
         context_index -= 1
         field_path.pop(0)
-        
+
     try:
         field_value = context_list[context_index]
     except IndexError:
         return None
-    
-    try:  
+
+    try:
         while len(field_path):
             field = field_path.pop(0)
             if isinstance(field_value, (list, tuple, set)):
@@ -148,15 +149,14 @@ def get_field_value_from_context(field_name, context_list):
                         field_value = field_value[field]
                     else:
                         field_value = None
-                    
+
             else:
                 field_value = getattr(field_value, field)
-                
+
         return field_value
     except (IndexError, AttributeError, KeyError):
         return None
-        
-    
+
 
 class IfField(BaseValidator):
     NEEDS_VALIDATE = 'needsValidate'
@@ -164,14 +164,14 @@ class IfField(BaseValidator):
     error_messages = {
         NEEDS_VALIDATE: "Some validate error due to field '$field_name' has value '$field_value'.",
     }
-    
+
     def __init__(self, validator, field_name, field_validator=None, *args, **kwargs):
         super(IfField, self).__init__(*args, **kwargs)
 
         self.validator = validator
         self.field_name = field_name
         self.field_validator = field_validator
-        
+
         self.message_values['field_name'] = field_name
 
     def _internal_is_valid(self, value, *args, **kwargs):
@@ -181,5 +181,5 @@ class IfField(BaseValidator):
                 self.messages.update(self.validator.messages)
                 self.error(self.NEEDS_VALIDATE, value, field_value=field_value)
                 return False
-                
+
         return True
