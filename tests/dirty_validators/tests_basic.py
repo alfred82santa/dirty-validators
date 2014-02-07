@@ -123,6 +123,10 @@ class TestLength(TestCase):
         self.assertFalse(self.validator.is_valid("aabbnnmm"))
         self.assertDictEqual(self.validator.messages, {Length.TOO_LONG: "'aabbnnmm' is more than 6 unit length"})
 
+    def test_validate_int_fail(self):
+        self.assertFalse(self.validator.is_valid(5))
+        self.assertDictEqual(self.validator.messages, {Length.INVALID_TYPE: "'5' has no length"})
+
     def test_validate_list_success(self):
         self.assertTrue(self.validator.is_valid(["1a", "32d", "tr", "wq"]))
         self.assertDictEqual(self.validator.messages, {})

@@ -1,6 +1,9 @@
 from unittest import TestCase
-from dirty_validators.complex import Chain, AllItems, SomeItems, get_field_value_from_context, IfField
+
 from dirty_validators.basic import Length, Regexp, Email
+from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
+                                      get_field_value_from_context, IfField,
+                                      DictValidate)
 
 
 class TestChainStopOnFail(TestCase):
@@ -56,6 +59,36 @@ class TestChainDontStopOnFail(TestCase):
                               Email.NOT_MAIL: "'abadefghijk+test.com' is not a valid email address."})
 
 
+class TestSame(TestCase):
+
+    def setUp(self):
+        self.validator = Some(validators=[Regexp(regex='^cba'),
+                                          Regexp(regex='^abc', error_code_map={Regexp.NOT_MATCH: 'ouch'}),
+                                          Email()])
+
+    def tearDown(self):
+        pass
+
+    def test_validate_str_first_success(self):
+        self.assertTrue(self.validator.is_valid('cbaaaa'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_second_success(self):
+        self.assertTrue(self.validator.is_valid('abcdefg'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_third_success(self):
+        self.assertTrue(self.validator.is_valid('bcdefg@test.com'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_fail_all(self):
+        self.assertFalse(self.validator.is_valid('abadefghijk+test.com'))
+        self.assertDictEqual(self.validator.messages,
+                             {Regexp.NOT_MATCH: "'abadefghijk+test.com' does not match against pattern '^cba'",
+                              'ouch': "'abadefghijk+test.com' does not match against pattern '^abc'",
+                              Email.NOT_MAIL: "'abadefghijk+test.com' is not a valid email address."})
+
+
 class TestAllItemsStopOnFail(TestCase):
 
     def setUp(self):
@@ -82,6 +115,12 @@ class TestAllItemsStopOnFail(TestCase):
         self.assertFalse(self.validator.is_valid(['test', '12345678901234', 'abcdefghijklmnsssssssso']))
         self.assertDictEqual(self.validator.messages,
                              {0: {Length.TOO_SHORT: "'test' is less than 14 unit length"}})
+
+    def test_validate_embeded_fail(self):
+        self.validator = AllItems(validator=AllItems(validator=Length(min=5, max=16)))
+        self.assertFalse(self.validator.is_valid([['testaaa', 'assa'], ['auds', 'aass']]))
+        self.assertDictEqual(self.validator.messages,
+                             {"0.1": {Length.TOO_SHORT: "'assa' is less than 5 unit length"}})
 
 
 class TestAllItemsDontStopOnFail(TestCase):
@@ -210,8 +249,33 @@ class TestIfField(TestCase):
         self.assertTrue(self.validator.is_valid('a', context=[{'fieldname1': 'abcd'}]), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
 
+    def test_no_context_success(self):
+        self.assertTrue(self.validator.is_valid('a', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
     def test_validate_fail(self):
         self.assertFalse(self.validator.is_valid('abcdefg', context=[{'fieldname1': 'a'}]), self.validator.messages)
         self.assertDictEqual(self.validator.messages,
                              {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'a'.",
                               Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+    def test_no_field_validator_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1')
+        self.assertTrue(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_no_context_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
+                                 run_if_none=True)
+        self.assertFalse(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'None'.",
+                              Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+class TestDictValidate(TestCase):
+
+    def setUp(self):
+        self.validator = DictValidate(spec={"fieldName1": Length(min=4, max=6),
+                                            "fieldName1": Length(min=4, max=6)})

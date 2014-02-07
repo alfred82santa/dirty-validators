@@ -107,10 +107,12 @@ class Length(BaseValidator):
 
     TOO_LONG = 'tooLong'
     TOO_SHORT = 'tooShort'
+    INVALID_TYPE = 'notLength'
 
     error_messages = {
         TOO_LONG: "'$value' is more than $max unit length",
-        TOO_SHORT: "'$value' is less than $min unit length"
+        TOO_SHORT: "'$value' is less than $min unit length",
+        INVALID_TYPE: "'$value' has no length"
     }
 
     def __init__(self, min=-1, max=-1, *args, **kwargs):
@@ -123,14 +125,18 @@ class Length(BaseValidator):
         self.message_values.update({"min": self.min, "max": self.max})
 
     def _internal_is_valid(self, value, *args, **kwargs):
-        l = len(value) or 0
-        if l < self.min:
-            self.error(self.TOO_SHORT, value)
+        try:
+            l = len(value) or 0
+            if l < self.min:
+                self.error(self.TOO_SHORT, value)
+                return False
+            if self.max != -1 and l > self.max:
+                self.error(self.TOO_LONG, value)
+                return False
+            return True
+        except TypeError:
+            self.error(self.INVALID_TYPE, value)
             return False
-        if self.max != -1 and l > self.max:
-            self.error(self.TOO_LONG, value)
-            return False
-        return True
 
 
 class NumberRange(BaseValidator):
