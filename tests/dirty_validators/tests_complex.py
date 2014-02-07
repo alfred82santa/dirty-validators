@@ -1,6 +1,9 @@
 from unittest import TestCase
-from dirty_validators.complex import Chain, AllItems, SomeItems
-from dirty_validators.basic import Length, Regexp, Email
+
+from dirty_validators.basic import Length, Regexp, Email, NotNone
+from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
+                                      get_field_value_from_context, IfField,
+                                      DictValidate)
 
 
 class TestChainStopOnFail(TestCase):
@@ -56,6 +59,36 @@ class TestChainDontStopOnFail(TestCase):
                               Email.NOT_MAIL: "'abadefghijk+test.com' is not a valid email address."})
 
 
+class TestSame(TestCase):
+
+    def setUp(self):
+        self.validator = Some(validators=[Regexp(regex='^cba'),
+                                          Regexp(regex='^abc', error_code_map={Regexp.NOT_MATCH: 'ouch'}),
+                                          Email()])
+
+    def tearDown(self):
+        pass
+
+    def test_validate_str_first_success(self):
+        self.assertTrue(self.validator.is_valid('cbaaaa'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_second_success(self):
+        self.assertTrue(self.validator.is_valid('abcdefg'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_third_success(self):
+        self.assertTrue(self.validator.is_valid('bcdefg@test.com'))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_str_fail_all(self):
+        self.assertFalse(self.validator.is_valid('abadefghijk+test.com'))
+        self.assertDictEqual(self.validator.messages,
+                             {Regexp.NOT_MATCH: "'abadefghijk+test.com' does not match against pattern '^cba'",
+                              'ouch': "'abadefghijk+test.com' does not match against pattern '^abc'",
+                              Email.NOT_MAIL: "'abadefghijk+test.com' is not a valid email address."})
+
+
 class TestAllItemsStopOnFail(TestCase):
 
     def setUp(self):
@@ -82,6 +115,12 @@ class TestAllItemsStopOnFail(TestCase):
         self.assertFalse(self.validator.is_valid(['test', '12345678901234', 'abcdefghijklmnsssssssso']))
         self.assertDictEqual(self.validator.messages,
                              {0: {Length.TOO_SHORT: "'test' is less than 14 unit length"}})
+
+    def test_validate_embeded_fail(self):
+        self.validator = AllItems(validator=AllItems(validator=Length(min=5, max=16)))
+        self.assertFalse(self.validator.is_valid([['testaaa', 'assa'], ['auds', 'aass']]))
+        self.assertDictEqual(self.validator.messages,
+                             {"0.1": {Length.TOO_SHORT: "'assa' is less than 5 unit length"}})
 
 
 class TestAllItemsDontStopOnFail(TestCase):
@@ -131,3 +170,171 @@ class TestSomeItems(TestCase):
                              {SomeItems.TOO_MANY_VALID_ITEMS: "Too many items pass validation",
                               4: {Length.TOO_SHORT: "'sd' is less than 4 unit length"},
                               3: {Length.TOO_LONG: "'wewwwwww' is more than 6 unit length"}})
+
+
+class TestContextField(TestCase):
+
+    def test_get_first_context_root_field(self):
+        contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
+        self.assertEqual(get_field_value_from_context('fieldname1', contexts), "bbb")
+
+    def test_get_second_context_root_field(self):
+        contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
+        self.assertEqual(get_field_value_from_context('<context>.fieldname1', contexts), "asa")
+
+    def test_get_third_context_root_field(self):
+        contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
+        self.assertIsNone(get_field_value_from_context('<context>.<context>.fieldname1', contexts))
+
+    def test_get_first_context_embeded_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {"fieldname3": "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {"fieldname3": "oouch"}}]
+        self.assertEqual(get_field_value_from_context('fieldname2.fieldname3', contexts), "oouch")
+
+    def test_get_second_context_embeded_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {"fieldname3": "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {"fieldname3": "oouch"}}]
+        self.assertEqual(get_field_value_from_context('<context>.fieldname2.fieldname3', contexts), "fuii")
+
+    def test_get_embeded_field_fail(self):
+        contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
+        self.assertIsNone(get_field_value_from_context('fieldname2.fieldname3', contexts))
+
+    def test_get_first_context_list_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
+                    {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
+        self.assertEqual(get_field_value_from_context('fieldname2.1', contexts), "fuii11")
+
+    def test_get_second_context_list_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
+                    {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
+        self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "fuii")
+
+    def test_get_list_field_fail(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
+                    {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
+        self.assertIsNone(get_field_value_from_context('fieldname2.3', contexts))
+
+    def test_get_immutable_field_fail(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
+                    {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
+        self.assertIsNone(get_field_value_from_context('fieldname2.3.qwq', contexts))
+
+    def test_get_first_context_dict_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {1: "asase", 2: "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {1: "asase11", 2: "fuii11"}}]
+        self.assertEqual(get_field_value_from_context('fieldname2.1', contexts), "asase11")
+
+    def test_get_second_context_dict_field(self):
+        contexts = [{"fieldname1": "asa", "fieldname2": {1: "asase", 2: "fuii"}},
+                    {"fieldname1": "bbb", "fieldname2": {1: "asase11", 2: "fuii11"}}]
+        self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "asase")
+
+
+class TestIfField(TestCase):
+
+    def setUp(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
+                                 field_validator=Length(min=1, max=2))
+
+    def tearDown(self):
+        pass
+
+    def test_validate_success(self):
+        self.assertTrue(self.validator.is_valid('abcd', context=[{'fieldname1': 'a'}]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_no_validate_success(self):
+        self.assertTrue(self.validator.is_valid('a', context=[{'fieldname1': 'abcd'}]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_no_context_success(self):
+        self.assertTrue(self.validator.is_valid('a', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_fail(self):
+        self.assertFalse(self.validator.is_valid('abcdefg', context=[{'fieldname1': 'a'}]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'a'.",
+                              Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+    def test_no_field_validator_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1')
+        self.assertTrue(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_no_context_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
+                                 run_if_none=True)
+        self.assertFalse(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'None'.",
+                              Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+    def test_no_context_no_check_info_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
+                                 run_if_none=True,
+                                 add_check_info=False)
+        self.assertFalse(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+
+class TestDictValidate(TestCase):
+
+    def setUp(self):
+        self.validator = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6)),
+                                            "fieldName2": IfField(field_name="fieldName2",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  add_check_info=False,
+                                                                  validator=Length(min=1, max=2)),
+                                            "fieldName3": Chain(validators=[NotNone(),
+                                                                            Length(min=7, max=8)])})
+
+    def test_validate_only_required_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName3": "abcedef"}), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_only_required_fail(self):
+        self.assertFalse(self.validator.is_valid({}))
+        self.assertDictEqual(self.validator.messages, {'fieldName3': {NotNone.NOT_NONE: 'Value must not be None'}})
+
+    def test_validate_first_optional_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName1": "abdef",
+                                                 "fieldName3": "abcedef"}),
+                        self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_first_optional_fail(self):
+        self.assertFalse(self.validator.is_valid({"fieldName1": "af",
+                                                  "fieldName3": "abcedef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName1': {Length.TOO_SHORT:
+                                             "'af' is less than 4 unit length",
+                                             IfField.NEEDS_VALIDATE:
+                                             "Some validate error due to field 'fieldName1' has value 'af'."}})
+
+    def test_validate_second_optional_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName2": "ab",
+                                                 "fieldName3": "abcedef"}),
+                        self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_second_optional_fail(self):
+        self.assertFalse(self.validator.is_valid({"fieldName2": "afaas",
+                                                  "fieldName3": "abcedef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName2': {Length.TOO_LONG: "'afaas' is more than 2 unit length"}})
+
+    def test_validate_no_dict_fail(self):
+        self.assertFalse(self.validator.is_valid("asasa"))
+        self.assertDictEqual(self.validator.messages,
+                             {DictValidate.INVALID_TYPE: "'asasa' is not a dictionary"})

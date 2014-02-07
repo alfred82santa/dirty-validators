@@ -123,6 +123,10 @@ class TestLength(TestCase):
         self.assertFalse(self.validator.is_valid("aabbnnmm"))
         self.assertDictEqual(self.validator.messages, {Length.TOO_LONG: "'aabbnnmm' is more than 6 unit length"})
 
+    def test_validate_int_fail(self):
+        self.assertFalse(self.validator.is_valid(5))
+        self.assertDictEqual(self.validator.messages, {Length.INVALID_TYPE: "'5' has no length"})
+
     def test_validate_list_success(self):
         self.assertTrue(self.validator.is_valid(["1a", "32d", "tr", "wq"]))
         self.assertDictEqual(self.validator.messages, {})
@@ -492,6 +496,7 @@ class TestEmpty(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -501,6 +506,7 @@ class TestEmpty(TestCase):
     def test_validate_not_empty_class(self):
 
         class NotEmptyClass:
+
             def __repr__(self):
                 return "NotEmptyClass"
 
@@ -528,6 +534,7 @@ class TestNotEmpty(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -561,6 +568,7 @@ class TestIsNone(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -586,6 +594,7 @@ class TestIsNotNone(TestCase):
     def test_empty_class_ok(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 

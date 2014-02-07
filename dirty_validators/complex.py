@@ -29,7 +29,33 @@ class Chain(BaseValidator):
         return result
 
 
+class Some(BaseValidator):
+
+    """
+    Pass some validators for one value
+    """
+
+    def __init__(self, validators=[], *args, **kwargs):
+        super(Some, self).__init__(*args, **kwargs)
+
+        self.validators = validators.copy()
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        messages = {}
+        for validator in self.validators:
+            if validator.is_valid(value, *args, **kwargs):
+                return True
+            messages.update(validator.messages)
+
+        self.messages.update(messages)
+        return False
+
+
 class ComplexValidator(BaseValidator):
+
+    """
+    Base for validator which inject context
+    """
 
     def is_valid(self, value, *args, **kwargs):
         context = kwargs.get('context', [])
@@ -40,6 +66,17 @@ class ComplexValidator(BaseValidator):
 
         context.pop()
         return result
+
+    def import_messages(self, prefix, messages):
+        base_messages = {}
+        for key, message in messages.items():
+            if isinstance(message, dict):
+                self.messages[str(prefix) + "." + str(key)] = message
+            else:
+                base_messages[key] = message
+
+        if len(base_messages):
+            self.messages[prefix] = base_messages
 
 
 class ListValidator(ComplexValidator):
@@ -65,7 +102,7 @@ class AllItems(ListValidator):
         result = True
         for item_index in range(len(value)):
             if not self.validator.is_valid(value[item_index], *args, **kwargs):
-                self.messages[item_index] = self.validator.messages
+                self.import_messages(item_index, self.validator.messages)
                 result = False
                 if self.stop_on_fail:
                     return False
@@ -97,37 +134,141 @@ class SomeItems(ListValidator):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         item_pass = 0
-        messages = {}
         for item_index in range(len(value)):
             if not self.validator.is_valid(value[item_index], *args, **kwargs):
-                messages[item_index] = self.validator.messages
+                self.import_messages(item_index, self.validator.messages)
             else:
                 item_pass += 1
                 if self.stop_on_fail and max != -1 and item_pass > self.max:
                     self.error(self.TOO_MANY_VALID_ITEMS, value)
-                    self.messages.update(messages)
                     return False
 
         if max != -1 and item_pass > self.max:
             self.error(self.TOO_MANY_VALID_ITEMS, value)
-            self.messages.update(messages)
             return False
 
         if min != -1 and item_pass < self.min:
             self.error(self.TOO_FEW_VALID_ITEMS, value)
-            self.messages.update(messages)
+            return False
+
+        self.messages = {}
+        return True
+
+
+def get_field_value_from_context(field_name, context_list):
+    """
+    Helper to get field value from string path.
+    String '<context>' is used to go up on context stack. It just
+    can be used at the beginning of path: <context>.<context>.field_name_1
+    """
+    field_path = field_name.split('.')
+    context_index = -1
+    while field_path[0] == '<context>':
+        context_index -= 1
+        field_path.pop(0)
+
+    try:
+        field_value = context_list[context_index]
+
+        while len(field_path):
+            field = field_path.pop(0)
+            if isinstance(field_value, (list, tuple)):
+                if field.isdigit():
+                    field = int(field)
+                field_value = field_value[field]
+            elif isinstance(field_value, dict):
+                try:
+                    field_value = field_value[field]
+                except KeyError:
+                    if field.isdigit():
+                        field = int(field)
+                        field_value = field_value[field]
+                    else:
+                        field_value = None
+
+            else:
+                field_value = getattr(field_value, field)
+
+        return field_value
+    except (IndexError, AttributeError, KeyError):
+        return None
+
+
+class IfField(BaseValidator):
+
+    """
+    Conditional validator. It run validators if a specific field value pass validations.
+    """
+
+    NEEDS_VALIDATE = 'needsValidate'
+
+    error_messages = {
+        NEEDS_VALIDATE: "Some validate error due to field '$field_name' has value '$field_value'.",
+    }
+
+    def __init__(self, validator, field_name, field_validator=None,
+                 run_if_none=False, add_check_info=True, *args, **kwargs):
+        super(IfField, self).__init__(*args, **kwargs)
+
+        self.validator = validator
+        self.field_name = field_name
+        self.field_validator = field_validator
+        self.run_if_none = run_if_none
+        self.add_check_info = add_check_info
+
+        self.message_values['field_name'] = field_name
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        field_value = get_field_value_from_context(self.field_name, kwargs.get('context', []))
+
+        if (self.run_if_none or field_value is not None) and \
+                (self.field_validator is None or self.field_validator.is_valid(field_value, *args, **kwargs)) and \
+                not self.validator.is_valid(value, *args, **kwargs):
+            self.messages.update(self.validator.messages)
+            if self.add_check_info:
+                self.error(self.NEEDS_VALIDATE, value, field_value=field_value)
             return False
 
         return True
 
 
-# class DependsOnFields(BaseValidator):
-#    def is_valid(self, value, *args, **kwargs):
-#        context = kwargs.get('context', [])
-#        context.append(value)
-#        kwargs['context'] = context
-#
-#        result = super(ComplexValidator, self).is_valid(value, *args, **kwargs)
-#
-#        context.pop()
-#        return result
+class BaseSpec(ComplexValidator):
+
+    """
+    Base class to use spec
+    """
+
+    def __init__(self, spec={}, stop_on_fail=True, *args, **kwargs):
+        super(BaseSpec, self).__init__(*args, **kwargs)
+        self.spec = spec
+        self.stop_on_fail = stop_on_fail
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        result = True
+        for field_name, validator in self.spec.items():
+            field_value = self.get_field_value(field_name, value)
+            if not validator.is_valid(field_value, *args, **kwargs):
+                self.import_messages(field_name, validator.messages)
+                result = False
+                if self.stop_on_fail:
+                    return False
+
+        return result
+
+
+class DictValidate(BaseSpec):
+
+    INVALID_TYPE = 'notDict'
+
+    error_messages = {
+        INVALID_TYPE: "'$value' is not a dictionary",
+    }
+
+    def get_field_value(self, field_name, value):
+        return value.get(field_name, None)
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        if not isinstance(value, dict):
+            self.error(self.INVALID_TYPE, value)
+            return False
+        return super(DictValidate, self)._internal_is_valid(value, *args, **kwargs)
