@@ -28,6 +28,7 @@ class Chain(BaseValidator):
                     return False
         return result
 
+
 class Some(BaseValidator):
 
     """
@@ -76,6 +77,7 @@ class ComplexValidator(BaseValidator):
 
         if len(base_messages):
             self.messages[prefix] = base_messages
+
 
 class ListValidator(ComplexValidator):
 
@@ -204,13 +206,15 @@ class IfField(BaseValidator):
         NEEDS_VALIDATE: "Some validate error due to field '$field_name' has value '$field_value'.",
     }
 
-    def __init__(self, validator, field_name, field_validator=None, run_if_none=False, *args, **kwargs):
+    def __init__(self, validator, field_name, field_validator=None,
+                 run_if_none=False, add_check_info=True, *args, **kwargs):
         super(IfField, self).__init__(*args, **kwargs)
 
         self.validator = validator
         self.field_name = field_name
         self.field_validator = field_validator
         self.run_if_none = run_if_none
+        self.add_check_info = add_check_info
 
         self.message_values['field_name'] = field_name
 
@@ -221,7 +225,8 @@ class IfField(BaseValidator):
                 (self.field_validator is None or self.field_validator.is_valid(field_value, *args, **kwargs)) and \
                 not self.validator.is_valid(value, *args, **kwargs):
             self.messages.update(self.validator.messages)
-            self.error(self.NEEDS_VALIDATE, value, field_value=field_value)
+            if self.add_check_info:
+                self.error(self.NEEDS_VALIDATE, value, field_value=field_value)
             return False
 
         return True
@@ -234,21 +239,22 @@ class BaseSpec(ComplexValidator):
     """
 
     def __init__(self, spec={}, stop_on_fail=True, *args, **kwargs):
-        super(SomeItems, self).__init__(*args, **kwargs)
-        self.spec = {}
+        super(BaseSpec, self).__init__(*args, **kwargs)
+        self.spec = spec
         self.stop_on_fail = stop_on_fail
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
         for field_name, validator in self.spec.items():
             field_value = self.get_field_value(field_name, value)
-            if validator.is_valid(field_value, *args, **kwargs):
+            if not validator.is_valid(field_value, *args, **kwargs):
                 self.import_messages(field_name, validator.messages)
                 result = False
                 if self.stop_on_fail:
                     return False
 
         return result
+
 
 class DictValidate(BaseSpec):
 

@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from dirty_validators.basic import Length, Regexp, Email
+from dirty_validators.basic import Length, Regexp, Email, NotNone
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
                                       DictValidate)
@@ -274,8 +274,67 @@ class TestIfField(TestCase):
                              {IfField.NEEDS_VALIDATE: "Some validate error due to field 'fieldname1' has value 'None'.",
                               Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
 
+    def test_no_context_no_check_info_fail(self):
+        self.validator = IfField(validator=Length(min=4, max=6),
+                                 field_name='fieldname1',
+                                 run_if_none=True,
+                                 add_check_info=False)
+        self.assertFalse(self.validator.is_valid('abcdefg', context=[]), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {Length.TOO_LONG: "'abcdefg' is more than 6 unit length"})
+
+
 class TestDictValidate(TestCase):
 
     def setUp(self):
-        self.validator = DictValidate(spec={"fieldName1": Length(min=4, max=6),
-                                            "fieldName1": Length(min=4, max=6)})
+        self.validator = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6)),
+                                            "fieldName2": IfField(field_name="fieldName2",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  add_check_info=False,
+                                                                  validator=Length(min=1, max=2)),
+                                            "fieldName3": Chain(validators=[NotNone(),
+                                                                            Length(min=7, max=8)])})
+
+    def test_validate_only_required_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName3": "abcedef"}), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_only_required_fail(self):
+        self.assertFalse(self.validator.is_valid({}))
+        self.assertDictEqual(self.validator.messages, {'fieldName3': {NotNone.NOT_NONE: 'Value must not be None'}})
+
+    def test_validate_first_optional_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName1": "abdef",
+                                                 "fieldName3": "abcedef"}),
+                        self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_first_optional_fail(self):
+        self.assertFalse(self.validator.is_valid({"fieldName1": "af",
+                                                  "fieldName3": "abcedef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName1': {Length.TOO_SHORT:
+                                             "'af' is less than 4 unit length",
+                                             IfField.NEEDS_VALIDATE:
+                                             "Some validate error due to field 'fieldName1' has value 'af'."}})
+
+    def test_validate_second_optional_success(self):
+        self.assertTrue(self.validator.is_valid({"fieldName2": "ab",
+                                                 "fieldName3": "abcedef"}),
+                        self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_second_optional_fail(self):
+        self.assertFalse(self.validator.is_valid({"fieldName2": "afaas",
+                                                  "fieldName3": "abcedef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName2': {Length.TOO_LONG: "'afaas' is more than 2 unit length"}})
+
+    def test_validate_no_dict_fail(self):
+        self.assertFalse(self.validator.is_valid("asasa"))
+        self.assertDictEqual(self.validator.messages,
+                             {DictValidate.INVALID_TYPE: "'asasa' is not a dictionary"})

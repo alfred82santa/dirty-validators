@@ -496,6 +496,7 @@ class TestEmpty(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -505,6 +506,7 @@ class TestEmpty(TestCase):
     def test_validate_not_empty_class(self):
 
         class NotEmptyClass:
+
             def __repr__(self):
                 return "NotEmptyClass"
 
@@ -532,6 +534,7 @@ class TestNotEmpty(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -565,6 +568,7 @@ class TestIsNone(TestCase):
     def test_validate_class_empty(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
@@ -590,6 +594,7 @@ class TestIsNotNone(TestCase):
     def test_empty_class_ok(self):
 
         class EmptyClass:
+
             def __len__(self):
                 return 0
 
