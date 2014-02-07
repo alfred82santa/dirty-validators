@@ -420,3 +420,73 @@ class NoneOf(BaseValidator):
             self.error(self.IN_LIST, value, values=self.values_formatter(self.values))
             return False
         return True
+
+
+class IsEmpty(BaseValidator):
+
+    """
+    Compares the incoming value with an empty one
+    """
+    EMPTY = 'Empty'
+
+    error_messages = {EMPTY: "'$value' must be empty"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value:
+            self.error(self.EMPTY, value)
+            return False
+        return True
+
+
+class NotEmpty(BaseValidator):
+
+    """
+    Raise error when it is empty
+    """
+    NOT_EMPTY = 'notEmpty'
+
+    error_messages = {NOT_EMPTY: "'$value' is required and can not be empty"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if not value:
+            self.error(self.NOT_EMPTY, value)
+            return False
+        return True
+
+
+class IsNone(BaseValidator):
+
+    """
+    Raise error if it is not None
+    """
+
+    NONE = 'None'
+
+    error_messages = {NONE: "'$value' must be None"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value is not None:
+            self.error(self.NONE, value)
+            return False
+        return True
+
+
+class NotNone(BaseValidator):
+
+    """
+    Raise error if it is None
+    """
+
+    NOT_NONE = 'notNone'
+
+    error_messages = {NOT_NONE: "Value must not be None"}
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if value is None:
+            self.error(self.NOT_NONE, value)
+            return False
+        return True

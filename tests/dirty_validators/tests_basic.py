@@ -1,6 +1,7 @@
 from unittest import TestCase
 from dirty_validators.basic import (BaseValidator, EqualTo, NotEqualTo, Length, NumberRange,
-                                    Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf)
+                                    Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf,
+                                    IsEmpty, NotEmpty, IsNone, NotNone)
 import re
 
 
@@ -477,3 +478,116 @@ class TestNoneOf(TestCase):
     def test_validate_str_fail(self):
         self.assertFalse(self.validator.is_valid("ouch"))
         self.assertDictEqual(self.validator.messages, {NoneOf.IN_LIST: "'ouch' is one of 1, '2', 'aaas', 'ouch'."})
+
+
+class TestEmpty(TestCase):
+
+    def setUp(self):
+        self.validator = IsEmpty()
+
+    def test_validate_str_empty(self):
+        self.assertTrue(self.validator.is_valid(""))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_class_empty(self):
+
+        class EmptyClass:
+            def __len__(self):
+                return 0
+
+        self.assertTrue(self.validator.is_valid(EmptyClass()))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_not_empty_class(self):
+
+        class NotEmptyClass:
+            def __repr__(self):
+                return "NotEmptyClass"
+
+        self.assertFalse(self.validator.is_valid(NotEmptyClass()))
+        self.assertDictEqual(self.validator.messages, {IsEmpty.EMPTY: "'NotEmptyClass' must be empty"})
+
+    def test_validate_none_ok(self):
+        self.assertTrue(self.validator.is_valid(None))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_float_ok(self):
+        self.assertTrue(self.validator.is_valid(0.0))
+
+
+class TestNotEmpty(TestCase):
+
+    def setUp(self):
+        self.validator = NotEmpty()
+
+    def test_validate_str_empty(self):
+        self.assertFalse(self.validator.is_valid(""))
+        self.assertDictEqual(self.validator.messages,
+                             {NotEmpty.NOT_EMPTY: "'' is required and can not be empty"})
+
+    def test_validate_class_empty(self):
+
+        class EmptyClass:
+            def __len__(self):
+                return 0
+
+        self.assertFalse(self.validator.is_valid(EmptyClass()))
+
+    def test_validate_not_empty_class(self):
+
+        class NotEmptyClass:
+            pass
+
+        self.assertTrue(self.validator.is_valid(NotEmptyClass()))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_none_raises(self):
+        self.assertFalse(self.validator.is_valid(None))
+
+    def test_float_raises(self):
+        self.assertFalse(self.validator.is_valid(0.0))
+
+
+class TestIsNone(TestCase):
+
+    def setUp(self):
+        self.validator = IsNone()
+
+    def test_validate_str_empty(self):
+        self.assertFalse(self.validator.is_valid(""))
+        self.assertDictEqual(self.validator.messages,
+                             {IsNone.NONE: "'' must be None"})
+
+    def test_validate_class_empty(self):
+
+        class EmptyClass:
+            def __len__(self):
+                return 0
+
+        self.assertFalse(self.validator.is_valid(EmptyClass()))
+
+    def test_validate_none(self):
+        self.assertTrue(self.validator.is_valid(None))
+
+    def test_float_raises(self):
+        self.assertFalse(self.validator.is_valid(0.0))
+
+
+class TestIsNotNone(TestCase):
+
+    def setUp(self):
+        self.validator = NotNone()
+
+    def test_validate_none_raises(self):
+        self.assertFalse(self.validator.is_valid(None))
+        self.assertDictEqual(self.validator.messages,
+                             {NotNone.NOT_NONE: NotNone.error_messages[NotNone.NOT_NONE]})
+
+    def test_empty_class_ok(self):
+
+        class EmptyClass:
+            def __len__(self):
+                return 0
+
+        self.assertTrue(self.validator.is_valid(EmptyClass()))
+        self.assertDictEqual(self.validator.messages, {})
