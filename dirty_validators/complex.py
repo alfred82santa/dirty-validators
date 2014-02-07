@@ -240,7 +240,7 @@ class BaseSpec(ComplexValidator):
 
     def __init__(self, spec={}, stop_on_fail=True, *args, **kwargs):
         super(BaseSpec, self).__init__(*args, **kwargs)
-        self.spec = spec
+        self.spec = spec.copy()
         self.stop_on_fail = stop_on_fail
 
     def _internal_is_valid(self, value, *args, **kwargs):
