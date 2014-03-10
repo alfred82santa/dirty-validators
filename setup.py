@@ -6,9 +6,9 @@ setup(
     author='alfred82santa',
     version='0.1',
     author_email='alfred82santa@gmail.com',
-    packages=find_packages(exclude=['test*']),
+    packages=['dirty_validators'],
     include_package_data=True,
     test_suite="nose.collector",
     tests_require="nose",
-    zip_safe=False,
+    zip_safe=True,
 )
