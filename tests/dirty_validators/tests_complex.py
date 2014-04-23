@@ -342,16 +342,16 @@ class TestDictValidate(TestCase):
 
     def test_validate_all_stop_on_fail_fail(self):
         self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
-                                                                  field_validator=NotNone(),
-                                                                  run_if_none=True,
-                                                                  validator=Length(min=4, max=6))),
-                                            ("fieldName2", IfField(field_name="fieldName2",
-                                                                  field_validator=NotNone(),
-                                                                  run_if_none=True,
-                                                                  add_check_info=False,
-                                                                  validator=Length(min=1, max=2))),
-                                            ("fieldName3", Chain(validators=[NotNone(),
-                                                                            Length(min=7, max=8)]))]))
+                                                                               field_validator=NotNone(),
+                                                                               run_if_none=True,
+                                                                               validator=Length(min=4, max=6))),
+                                                        ("fieldName2", IfField(field_name="fieldName2",
+                                                                               field_validator=NotNone(),
+                                                                               run_if_none=True,
+                                                                               add_check_info=False,
+                                                                               validator=Length(min=1, max=2))),
+                                                        ("fieldName3", Chain(validators=[NotNone(),
+                                                                                         Length(min=7, max=8)]))]))
         self.assertFalse(self.validator.is_valid({"fieldName1": "af",
                                                   "fieldName2": "asasasasas",
                                                   "fieldName3": "abcedddddef"}))
@@ -363,16 +363,16 @@ class TestDictValidate(TestCase):
 
     def test_validate_all_dont_stop_on_fail_fail(self):
         self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
-                                                                  field_validator=NotNone(),
-                                                                  run_if_none=True,
-                                                                  validator=Length(min=4, max=6))),
-                                            ("fieldName2", IfField(field_name="fieldName2",
-                                                                  field_validator=NotNone(),
-                                                                  run_if_none=True,
-                                                                  add_check_info=False,
-                                                                  validator=Length(min=1, max=2))),
-                                            ("fieldName3", Chain(validators=[NotNone(),
-                                                                            Length(min=7, max=8)]))]),
+                                                                               field_validator=NotNone(),
+                                                                               run_if_none=True,
+                                                                               validator=Length(min=4, max=6))),
+                                                        ("fieldName2", IfField(field_name="fieldName2",
+                                                                               field_validator=NotNone(),
+                                                                               run_if_none=True,
+                                                                               add_check_info=False,
+                                                                               validator=Length(min=1, max=2))),
+                                                        ("fieldName3", Chain(validators=[NotNone(),
+                                                                                         Length(min=7, max=8)]))]),
                                       stop_on_fail=False)
         self.assertFalse(self.validator.is_valid({"fieldName1": "af",
                                                   "fieldName2": "asasasasas",
@@ -390,9 +390,9 @@ class TestDictTreeValidate(TestCase):
 
     def setUp(self):
         dicttree1 = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
-                                                                  field_validator=NotNone(),
-                                                                  run_if_none=True,
-                                                                  validator=Length(min=4, max=6)),
+                                                             field_validator=NotNone(),
+                                                             run_if_none=True,
+                                                             validator=Length(min=4, max=6)),
                                        "fieldName2": IfField(field_name="<context>.fieldName2",
                                                              field_validator=NotNone(),
                                                              run_if_none=True,
@@ -449,6 +449,7 @@ class TestDictTreeValidate(TestCase):
 
 
 class TestRequiredValidate(TestCase):
+
     def setUp(self):
         self.validator = Required(validators=[Length(min=7, max=8)])
 
@@ -474,8 +475,8 @@ class TestRequiredValidate(TestCase):
         self.assertDictEqual(self.validator.messages, {'required': 'Value is required and can not be empty'})
 
 
-
 class TestOptionalValidate(TestCase):
+
     def setUp(self):
         self.validator = Optional(validators=[Length(min=7, max=8)])
 
