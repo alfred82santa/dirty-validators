@@ -6,6 +6,7 @@ Complex validators
 from .basic import BaseValidator
 from dirty_validators.basic import NotNone
 from collections import OrderedDict
+from dirty_models.models import BaseModel
 
 
 class Chain(BaseValidator):
@@ -14,11 +15,11 @@ class Chain(BaseValidator):
     Use a chain of validators for one value
     """
 
-    def __init__(self, validators=[], stop_on_fail=True, *args, **kwargs):
+    def __init__(self, validators=None, stop_on_fail=True, *args, **kwargs):
         super(Chain, self).__init__(*args, **kwargs)
 
         self.stop_on_fail = stop_on_fail
-        self.validators = validators.copy()
+        self.validators = validators.copy() if validators is not None else []
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
@@ -37,10 +38,10 @@ class Some(BaseValidator):
     Pass some validators for one value
     """
 
-    def __init__(self, validators=[], *args, **kwargs):
+    def __init__(self, validators=None, *args, **kwargs):
         super(Some, self).__init__(*args, **kwargs)
 
-        self.validators = validators.copy()
+        self.validators = validators.copy() if validators is not None else []
 
     def _internal_is_valid(self, value, *args, **kwargs):
         messages = {}
@@ -242,7 +243,15 @@ class BaseSpec(ComplexValidator):
 
     def __init__(self, spec=None, stop_on_fail=True, *args, **kwargs):
         super(BaseSpec, self).__init__(*args, **kwargs)
-        self.spec = spec.copy() if spec is not None else OrderedDict()
+
+        if spec is not None:
+            self.spec = spec.copy()
+
+        try:
+            self.spec
+        except AttributeError:
+            self.spec = OrderedDict()
+
         self.stop_on_fail = stop_on_fail
 
     def _internal_is_valid(self, value, *args, **kwargs):
@@ -303,3 +312,50 @@ class Optional(Required):
             return True
 
         return Chain._internal_is_valid(self, value, *args, **kwargs)
+
+
+class ModelValidateMetaclass(type):
+
+    @classmethod
+    def __prepare__(metacls, name, bases):  # No keywords in this case
+        return OrderedDict()
+
+    def __new__(cls, name, bases, classdict):
+
+        result = super(ModelValidateMetaclass, cls).__new__(
+            cls, name, bases, classdict)
+
+        spec = OrderedDict([(field, validator) for field, validator in classdict.items()
+                            if hasattr(validator, 'is_valid')])
+
+        setattr(result, 'spec', spec)
+        return result
+
+
+class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
+
+    __modelclass__ = BaseModel
+
+    INVALID_MODEL = 'notModel'
+
+    error_messages = {
+        INVALID_MODEL: "'$value' is not an instance of $model",
+    }
+
+    def __init__(self, spec=None, *args, **kwargs):
+        self.spec = self.spec.copy()
+        if spec is not None:
+            self.spec.update(spec)
+
+        super(ModelValidate, self).__init__(*args, **kwargs)
+
+    def get_field_value(self, field_name, value):
+        return getattr(value, field_name)
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        print(self.__modelclass__)
+        if not isinstance(value, self.__modelclass__):
+            self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
+            return False
+
+        return super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
