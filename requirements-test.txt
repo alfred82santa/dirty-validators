@@ -2,3 +2,4 @@ pep8
 flake8
 coverage
 nose
+git+https://github.com/alfred82santa/dirty-models.git
