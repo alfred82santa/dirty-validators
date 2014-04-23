@@ -4,6 +4,8 @@ Validators library
 Complex validators
 """
 from .basic import BaseValidator
+from dirty_validators.basic import NotNone
+from collections import OrderedDict
 
 
 class Chain(BaseValidator):
@@ -238,9 +240,9 @@ class BaseSpec(ComplexValidator):
     Base class to use spec
     """
 
-    def __init__(self, spec={}, stop_on_fail=True, *args, **kwargs):
+    def __init__(self, spec=None, stop_on_fail=True, *args, **kwargs):
         super(BaseSpec, self).__init__(*args, **kwargs)
-        self.spec = spec.copy()
+        self.spec = spec.copy() if spec is not None else OrderedDict()
         self.stop_on_fail = stop_on_fail
 
     def _internal_is_valid(self, value, *args, **kwargs):
@@ -272,3 +274,32 @@ class DictValidate(BaseSpec):
             self.error(self.INVALID_TYPE, value)
             return False
         return super(DictValidate, self)._internal_is_valid(value, *args, **kwargs)
+
+
+class Required(Chain):
+
+    REQUIRED = 'required'
+
+    error_messages = {
+        REQUIRED: "Value is required and can not be empty",
+    }
+
+    def __init__(self, empty_validator=None, *args, **kwargs):
+        self.empty_validator = empty_validator or NotNone()
+        super(Required, self).__init__(*args, **kwargs)
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        if not self.empty_validator.is_valid(value):
+            self.error(self.REQUIRED, value)
+            return False
+
+        return super(Required, self)._internal_is_valid(value, *args, **kwargs)
+
+
+class Optional(Required):
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        if not self.empty_validator.is_valid(value):
+            return True
+
+        return Chain._internal_is_valid(self, value, *args, **kwargs)

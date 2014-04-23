@@ -1,9 +1,10 @@
 from unittest import TestCase
 
-from dirty_validators.basic import Length, Regexp, Email, NotNone
+from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
-                                      DictValidate)
+                                      DictValidate, Required, Optional)
+from collections import OrderedDict
 
 
 class TestChainStopOnFail(TestCase):
@@ -338,3 +339,163 @@ class TestDictValidate(TestCase):
         self.assertFalse(self.validator.is_valid("asasa"))
         self.assertDictEqual(self.validator.messages,
                              {DictValidate.INVALID_TYPE: "'asasa' is not a dictionary"})
+
+    def test_validate_all_stop_on_fail_fail(self):
+        self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6))),
+                                            ("fieldName2", IfField(field_name="fieldName2",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  add_check_info=False,
+                                                                  validator=Length(min=1, max=2))),
+                                            ("fieldName3", Chain(validators=[NotNone(),
+                                                                            Length(min=7, max=8)]))]))
+        self.assertFalse(self.validator.is_valid({"fieldName1": "af",
+                                                  "fieldName2": "asasasasas",
+                                                  "fieldName3": "abcedddddef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName1': {Length.TOO_SHORT:
+                                             "'af' is less than 4 unit length",
+                                             IfField.NEEDS_VALIDATE:
+                                             "Some validate error due to field 'fieldName1' has value 'af'."}})
+
+    def test_validate_all_dont_stop_on_fail_fail(self):
+        self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6))),
+                                            ("fieldName2", IfField(field_name="fieldName2",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  add_check_info=False,
+                                                                  validator=Length(min=1, max=2))),
+                                            ("fieldName3", Chain(validators=[NotNone(),
+                                                                            Length(min=7, max=8)]))]),
+                                      stop_on_fail=False)
+        self.assertFalse(self.validator.is_valid({"fieldName1": "af",
+                                                  "fieldName2": "asasasasas",
+                                                  "fieldName3": "abcedddddef"}))
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName1': {Length.TOO_SHORT:
+                                             "'af' is less than 4 unit length",
+                                             IfField.NEEDS_VALIDATE:
+                                             "Some validate error due to field 'fieldName1' has value 'af'."},
+                              'fieldName2': {Length.TOO_LONG: "'asasasasas' is more than 2 unit length"},
+                              'fieldName3': {Length.TOO_LONG: "'abcedddddef' is more than 8 unit length"}})
+
+
+class TestDictTreeValidate(TestCase):
+
+    def setUp(self):
+        dicttree1 = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6)),
+                                       "fieldName2": IfField(field_name="<context>.fieldName2",
+                                                             field_validator=NotNone(),
+                                                             run_if_none=True,
+                                                             add_check_info=False,
+                                                             validator=NotNone()),
+                                       "fieldName3": Chain(validators=[NotNone(),
+                                                                       Length(min=7, max=8)])})
+
+        self.validator = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  validator=Length(min=4, max=6)),
+                                            "fieldName2": IfField(field_name="fieldName2",
+                                                                  field_validator=NotNone(),
+                                                                  run_if_none=True,
+                                                                  add_check_info=False,
+                                                                  validator=Length(min=1, max=2)),
+                                            "fieldName3": Chain(validators=[NotNone(),
+                                                                            Length(min=7, max=8)]),
+                                            "fieldTree1": Chain(validators=[NotEmpty(), dicttree1])})
+
+    def test_validate_only_required_success(self):
+        data = {
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName3": "123456qw"
+            }
+        }
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_dependent_fields_success(self):
+        data = {
+            "fieldName2": "12",
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_dependent_fields_fail(self):
+        data = {
+            "fieldName2": "12",
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {'fieldTree1.fieldName2': {'notNone': 'Value must not be None'}})
+
+
+class TestRequiredValidate(TestCase):
+    def setUp(self):
+        self.validator = Required(validators=[Length(min=7, max=8)])
+
+    def test_success(self):
+        data = 'asdfghw'
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_fail(self):
+        data = None
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {'required': 'Value is required and can not be empty'})
+
+    def test_chain_fail(self):
+        data = ''
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {'tooShort': "'' is less than 7 unit length"})
+
+    def test_empty_fail(self):
+        self.validator = Required(empty_validator=NotEmpty(), validators=[Length(min=7, max=8)])
+        data = ''
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {'required': 'Value is required and can not be empty'})
+
+
+
+class TestOptionalValidate(TestCase):
+    def setUp(self):
+        self.validator = Optional(validators=[Length(min=7, max=8)])
+
+    def test_success(self):
+        data = None
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_chain_success(self):
+        data = 'asdfghw'
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_chain_fail(self):
+        data = ''
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {'tooShort': "'' is less than 7 unit length"})
+
+    def test_empty_fail(self):
+        self.validator = Optional(empty_validator=NotEmpty(), validators=[Length(min=7, max=8)])
+        data = ''
+        self.assertTrue(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
