@@ -3,8 +3,10 @@ from unittest import TestCase
 from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
-                                      DictValidate, Required, Optional)
+                                      DictValidate, Required, Optional, ModelValidate)
 from collections import OrderedDict
+from dirty_models.models import BaseModel
+from dirty_models.fields import StringField, ModelField
 
 
 class TestChainStopOnFail(TestCase):
@@ -340,6 +342,10 @@ class TestDictValidate(TestCase):
         self.assertDictEqual(self.validator.messages,
                              {DictValidate.INVALID_TYPE: "'asasa' is not a dictionary"})
 
+    def test_validate_no_spec(self):
+        validator = DictValidate()
+        self.assertIsInstance(validator.spec, OrderedDict)
+
     def test_validate_all_stop_on_fail_fail(self):
         self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
                                                                                field_validator=NotNone(),
@@ -500,3 +506,115 @@ class TestOptionalValidate(TestCase):
         data = ''
         self.assertTrue(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
+
+
+class FakeModelInner(BaseModel):
+
+    fieldName1 = StringField()
+    fieldName2 = StringField()
+    fieldName3 = StringField()
+
+
+class FakeModel(BaseModel):
+
+    fieldName1 = StringField()
+    fieldName2 = StringField()
+    fieldName3 = StringField()
+    fieldTree1 = ModelField(model_class=FakeModelInner)
+
+
+class FakeModelInnerValidate(ModelValidate):
+    __modelclass__ = FakeModelInner
+
+    fieldName1 = Optional(validators=[Length(min=4, max=6)])
+    fieldName2 = Required()
+    fieldName3 = Required(validators=[Length(min=7, max=8)])
+
+
+class FakeModelValidate(ModelValidate):
+    __modelclass__ = FakeModel
+
+    fieldName1 = Optional(validators=[Length(min=4, max=6)])
+    fieldName2 = Optional(validators=[Length(min=1, max=2)])
+    fieldName3 = Required(validators=[Length(min=7, max=8)])
+    fieldTree1 = Required(validators=[FakeModelInnerValidate()])
+
+
+class TestModelValidate(TestCase):
+
+    def setUp(self):
+        self.validator = FakeModelValidate()
+
+    def test_validate_only_required_success(self):
+        data = {
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName3": "123456qw",
+                "fieldName2": "343434"
+            }
+        }
+        self.assertTrue(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_dependent_fields_success(self):
+        data = {
+            "fieldName2": "12",
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertTrue(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_first_level_fail(self):
+        data = {
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldName3': {'required': 'Value is required and can not be empty'}})
+
+    def test_validate_change_spec_success(self):
+        self.validator = FakeModelValidate(spec={'fieldName3': Optional()})
+
+        data = {
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertTrue(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_change_spec_fail(self):
+        self.validator = FakeModelValidate(spec={'fieldName3': Optional()})
+
+        data = {
+            "fieldTree1": {
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldTree1.fieldName2': {'required': 'Value is required and can not be empty'}})
+
+    def test_validate_dependent_fields_fail(self):
+        data = {
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(FakeModel(data)), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {'fieldTree1.fieldName2': {'required': 'Value is required and can not be empty'}})
+
+    def test_validate_wrong_model_fail(self):
+        self.assertFalse(self.validator.is_valid(FakeModelInner()), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {'notModel': "'FakeModelInner({})' is not an instance of FakeModel"})
