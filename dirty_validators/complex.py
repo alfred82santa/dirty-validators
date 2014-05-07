@@ -158,6 +158,60 @@ class SomeItems(ListValidator):
         return True
 
 
+class ItemLimitedOccuerrences(BaseValidator):
+
+    """
+    Validate whether item in list are distincts
+    """
+
+    TOO_MANY_ITEM_OCCURRENCES = 'tooManyItemOccurrences'
+    TOO_FEW_ITEM_OCCURRENCES = 'tooFewItemOccurrences'
+
+    error_messages = {
+        TOO_MANY_ITEM_OCCURRENCES: "Item '$value' is repeated to many times. Limit to $max_occ.",
+        TOO_FEW_ITEM_OCCURRENCES: "Item '$value' is not enough repeated. Limit to $min_occ.",
+    }
+
+    def __init__(self, min_occ=0, max_occ=1, *args, **kwargs):
+        super(ItemLimitedOccuerrences, self).__init__(*args, **kwargs)
+        self.min_occ = min_occ
+        self.max_occ = max_occ
+
+        self.message_values['min_occ'] = self.min_occ
+        self.message_values['max_occ'] = self.max_occ
+
+    def _get_checking_value(self, value):
+        """
+        It must be override on descendant validators
+        """
+        return value
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        def add_occurrence(val, counter):
+            if val not in counter:
+                counter[val] = 0
+
+            counter[val] += 1
+
+        counter = {}
+
+        for item in value:
+            val = self._get_checking_value(item)
+            add_occurrence(val, counter)
+
+            if counter[val] > self.max_occ:
+                self.error(self.TOO_MANY_ITEM_OCCURRENCES, val)
+                return False
+
+        for val, occ in counter.items():
+            if occ < self.min_occ:
+                self.error(self.TOO_FEW_ITEM_OCCURRENCES, val)
+                return False
+
+        return True
+
+
 def get_field_value_from_context(field_name, context_list):
     """
     Helper to get field value from string path.
