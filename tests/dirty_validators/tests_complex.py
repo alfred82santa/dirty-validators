@@ -3,7 +3,7 @@ from unittest import TestCase
 from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
-                                      DictValidate, Required, Optional, ModelValidate)
+                                      DictValidate, Required, Optional, ModelValidate, ItemLimitedOccuerrences)
 from collections import OrderedDict
 from dirty_models.models import BaseModel
 from dirty_models.fields import StringField, ModelField
@@ -62,7 +62,7 @@ class TestChainDontStopOnFail(TestCase):
                               Email.NOT_MAIL: "'abadefghijk+test.com' is not a valid email address."})
 
 
-class TestSame(TestCase):
+class TestSome(TestCase):
 
     def setUp(self):
         self.validator = Some(validators=[Regexp(regex='^cba'),
@@ -173,6 +173,46 @@ class TestSomeItems(TestCase):
                              {SomeItems.TOO_MANY_VALID_ITEMS: "Too many items pass validation",
                               4: {Length.TOO_SHORT: "'sd' is less than 4 unit length"},
                               3: {Length.TOO_LONG: "'wewwwwww' is more than 6 unit length"}})
+
+
+class TestItemLimitedOccuerrencesDefault(TestCase):
+    def setUp(self):
+        self.validator = ItemLimitedOccuerrences()
+
+    def test_validate_success(self):
+        self.assertTrue(self.validator.is_valid([]), 'Zero elements')
+        self.assertTrue(self.validator.is_valid(['aaa']), 'One element')
+        self.assertTrue(self.validator.is_valid(['aaa', 'bbb']), 'Two elements')
+
+    def test_validate_fail(self):
+        self.assertFalse(self.validator.is_valid(['aaa', 'aaa', 'bbb', 'ccc', 'ccc']))
+        self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
+                                                       "Item 'aaa' is repeated to many times. Limit to 1."})
+
+    def test_validate_fail_2(self):
+        self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'ccc', 'ccc']))
+        self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
+                                                       "Item 'ccc' is repeated to many times. Limit to 1."})
+
+
+class TestItemLimitedOccuerrencesCustomLimits(TestCase):
+    def setUp(self):
+        self.validator = ItemLimitedOccuerrences(min_occ=2, max_occ=3)
+
+    def test_validate_success(self):
+        self.assertTrue(self.validator.is_valid([]), 'Zero elements')
+        self.assertTrue(self.validator.is_valid(['aaa', 'aaa']), 'One element')
+        self.assertTrue(self.validator.is_valid(['aaa', 'aaa', 'bbb', 'bbb', 'bbb']), 'Two elements')
+
+    def test_validate_too_few_fail(self):
+        self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc']))
+        self.assertDictEqual(self.validator.messages, {'tooFewItemOccurrences':
+                                                       "Item 'aaa' is not enough repeated. Limit to 2."})
+
+    def test_validate_too_many_fail(self):
+        self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc', 'ccc']))
+        self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
+                                                       "Item 'ccc' is repeated to many times. Limit to 3."})
 
 
 class TestContextField(TestCase):

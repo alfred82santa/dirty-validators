@@ -8,27 +8,43 @@ import re
 class BaseValidator:
     error_code_map = {}
     error_messages = {}
-
     message_values = {}
 
     def __init__(self, error_code_map=None, error_messages=None,
                  message_values=None, *args, **kwargs):
-
+        """
+        :param error_code_map: Map of orginial error codes to custom error codes
+        :rparam error_code_map: dict
+        :param error_messages: Map of error codes to error messages
+        :rparam error_messages: dict
+        :param message_values: Map of placeholders to values
+        :rparam error_messages: dict
+        """
         self.error_code_map = self.error_code_map.copy()
+        self.error_messages = self.error_messages.copy()
+        self.message_values = self.message_values.copy()
+
         if error_code_map:
             self.error_code_map.update(error_code_map)
 
-        self.error_messages = self.error_messages.copy()
         if error_messages:
             self.error_messages.update(error_messages)
 
-        self.message_values = self.message_values.copy()
         if message_values:
             self.message_values.update(message_values)
 
         self.messages = {}
 
     def error(self, error_code, value, **kwargs):
+        """
+        Helper to add error to messages field. It fills placeholder with extra call parameters
+        or values from message_value map.
+
+        :param error_code: Error code to use
+        :rparam error_code: str
+        :param value: Value checked
+        :param kwargs: Map of values to use in placeholders
+        """
         code = self.error_code_map.get(error_code, error_code)
 
         try:
@@ -51,7 +67,6 @@ class BaseValidator:
 
 
 class EqualTo(BaseValidator):
-
     """
     Compares value with a static value.
     """
@@ -60,6 +75,9 @@ class EqualTo(BaseValidator):
     error_messages = {NOT_EQUAL: "'$value' is not equal to '$comp_value'"}
 
     def __init__(self, comp_value=None, *args, **kwargs):
+        """
+        :param comp_value: Static value to use on check
+        """
         super(EqualTo, self).__init__(*args, **kwargs)
         self.comp_value = comp_value
         self.message_values.update({'comp_value': self.comp_value})
@@ -72,15 +90,17 @@ class EqualTo(BaseValidator):
 
 
 class NotEqualTo(BaseValidator):
-
     """
-    Check whether a value is distinct of static value.
+    Checks whether a value is distinct of static value.
     """
     IS_EQUAL = 'isEqual'
 
     error_messages = {IS_EQUAL: "'$value' is equal to '$comp_value'"}
 
     def __init__(self, comp_value=None, *args, **kwargs):
+        """
+        :param comp_value: Static value to use on check
+        """
         super(NotEqualTo, self).__init__(*args, **kwargs)
         self.comp_value = comp_value
         self.message_values.update({'comp_value': self.comp_value})
