@@ -407,7 +407,6 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
         return getattr(value, field_name)
 
     def _internal_is_valid(self, value, *args, **kwargs):
-        print(self.__modelclass__)
         if not isinstance(value, self.__modelclass__):
             self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
             return False
