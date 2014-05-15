@@ -67,6 +67,7 @@ class BaseValidator:
 
 
 class EqualTo(BaseValidator):
+
     """
     Compares value with a static value.
     """
@@ -90,6 +91,7 @@ class EqualTo(BaseValidator):
 
 
 class NotEqualTo(BaseValidator):
+
     """
     Checks whether a value is distinct of static value.
     """
@@ -110,6 +112,34 @@ class NotEqualTo(BaseValidator):
             self.error(self.IS_EQUAL, value)
             return False
         return True
+
+
+class StringNotContaining(BaseValidator):
+
+    """
+    Checks that the value does not contain a static substring
+    """
+    NOT_CONTAINS = 'notContains'
+
+    error_messages = {NOT_CONTAINS: "'$value' contains '$token'"}
+
+    def __init__(self, token=None, case_sensitive=True, *args, **kwargs):
+        """
+        :param token: Static value to see check it is contained in the string
+        :param case_sensitive: Boolean to check the string matching case or not
+        """
+        super(StringNotContaining, self).__init__(*args, **kwargs)
+        self.token = token
+        self.case_sensitive = case_sensitive
+        self.message_values.update({'token': self.token})
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+        if (not self.case_sensitive and (self.token.lower() not in value.lower())) or\
+                (self.case_sensitive and (self.token not in value)):
+            return True
+
+        self.error(self.NOT_CONTAINS, value)
+        return False
 
 
 class Length(BaseValidator):
