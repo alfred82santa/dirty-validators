@@ -176,6 +176,7 @@ class TestSomeItems(TestCase):
 
 
 class TestItemLimitedOccuerrencesDefault(TestCase):
+
     def setUp(self):
         self.validator = ItemLimitedOccuerrences()
 
@@ -196,6 +197,7 @@ class TestItemLimitedOccuerrencesDefault(TestCase):
 
 
 class TestItemLimitedOccuerrencesCustomLimits(TestCase):
+
     def setUp(self):
         self.validator = ItemLimitedOccuerrences(min_occ=2, max_occ=3)
 

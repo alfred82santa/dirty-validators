@@ -1,5 +1,5 @@
 from unittest import TestCase
-from dirty_validators.basic import (BaseValidator, EqualTo, NotEqualTo, Length, NumberRange,
+from dirty_validators.basic import (BaseValidator, EqualTo, NotEqualTo, StringNotContaining, Length, NumberRange,
                                     Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf,
                                     IsEmpty, NotEmpty, IsNone, NotNone)
 import re
@@ -101,6 +101,25 @@ class TestNotEqualTo(TestCase):
         self.validator = NotEqualTo(comp_value=3)
         self.assertFalse(self.validator.is_valid(3))
         self.assertDictEqual(self.validator.messages, {NotEqualTo.IS_EQUAL: "'3' is equal to '3'"})
+
+
+class TestStringNotContaining(TestCase):
+
+    def setUp(self):
+        self.validator = StringNotContaining(token='Test_TOKEN')
+
+    def test_validate_string_contains(self):
+        self.assertFalse(self.validator.is_valid('This string contains Test_TOKEN for sure'))
+        self.assertDictEqual(self.validator.messages,
+                             {StringNotContaining.NOT_CONTAINS:
+                              "'This string contains Test_TOKEN for sure' contains 'Test_TOKEN'"})
+
+    def test_validate_string_not_contains(self):
+        self.assertTrue(self.validator.is_valid('This string does not contain TESt_TOKEN for sensitive cases'))
+
+    def test_validate_string_contains_not_sensitive(self):
+        self.validator.case_sensitive = False
+        self.assertFalse(self.validator.is_valid('This string contains TESt_TOKEN for sensitive cases'))
 
 
 class TestLength(TestCase):
