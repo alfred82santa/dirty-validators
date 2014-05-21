@@ -23,6 +23,23 @@ class TestBaseValidator(TestCase):
         self.assertTrue(self.validator.is_valid({}))
         self.assertDictEqual(self.validator.messages, {})
 
+    def test_error_not_hidden_behaviour(self):
+        error_key = 'Test key'
+        error_message = "'$value' is the value error to test hidden feature"
+        self.validator.error_messages = {error_key: error_message}
+        self.validator.error(error_key, 'Not hidden')
+        self.assertEqual(self.validator.messages,
+                         {error_key: "'Not hidden' is the value error to test hidden feature"})
+
+    def test_error_hidden_behaviour(self):
+        hidden_validator = BaseValidator(hidden=True)
+        error_key = 'Test key'
+        error_message = "'$value' is the value error to test hidden feature"
+        hidden_validator.error_messages = {error_key: error_message}
+        hidden_validator.error(error_key, 'Will it be hidden?')
+        self.assertEqual(hidden_validator.messages,
+                         {error_key: "'**Hidden**' is the value error to test hidden feature"})
+
 
 class TestEqualTo(TestCase):
 
