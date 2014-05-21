@@ -9,9 +9,10 @@ class BaseValidator:
     error_code_map = {}
     error_messages = {}
     message_values = {}
+    hidden_value = '**Hidden**'
 
     def __init__(self, error_code_map=None, error_messages=None,
-                 message_values=None, *args, **kwargs):
+                 message_values=None, hidden=False, *args, **kwargs):
         """
         :param error_code_map: Map of orginial error codes to custom error codes
         :rparam error_code_map: dict
@@ -34,6 +35,7 @@ class BaseValidator:
             self.message_values.update(message_values)
 
         self.messages = {}
+        self.hidden = hidden
 
     def error(self, error_code, value, **kwargs):
         """
@@ -52,7 +54,7 @@ class BaseValidator:
         except KeyError:
             message = Template(self.error_messages[error_code])
 
-        placeholders = {"value": value}
+        placeholders = {"value": self.hidden_value if self.hidden else value}
         placeholders.update(kwargs)
         placeholders.update(self.message_values)
 
