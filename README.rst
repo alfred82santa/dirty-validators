@@ -55,7 +55,7 @@ Basic usage
         "fieldName3": "123456qw"
      }
 
-    assert validator_model.is_valid(FakeModel(data))
+    assert validator_model.is_valid(FakeModel(data)) is True
 
 .. note::
     Look at tests for more examples
