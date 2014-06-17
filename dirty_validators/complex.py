@@ -311,7 +311,8 @@ class BaseSpec(ComplexValidator):
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
         for field_name, validator in self.spec.items():
-            field_value = self.get_field_value(field_name, value)
+            field_value = self.get_field_value(field_name, value, kwargs)
+
             if not validator.is_valid(field_value, *args, **kwargs):
                 self.import_messages(field_name, validator.messages)
                 result = False
@@ -329,7 +330,7 @@ class DictValidate(BaseSpec):
         INVALID_TYPE: "'$value' is not a dictionary",
     }
 
-    def get_field_value(self, field_name, value):
+    def get_field_value(self, field_name, value, kwargs):
         return value.get(field_name, None)
 
     def _internal_is_valid(self, value, *args, **kwargs):
@@ -359,7 +360,11 @@ class Required(Chain):
         return super(Required, self)._internal_is_valid(value, *args, **kwargs)
 
 
-class Optional(Required):
+class Optional(Chain):
+
+    def __init__(self, empty_validator=None, *args, **kwargs):
+        self.empty_validator = empty_validator or NotNone()
+        super(Optional, self).__init__(*args, **kwargs)
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if not self.empty_validator.is_valid(value):
@@ -403,7 +408,8 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
 
         super(ModelValidate, self).__init__(*args, **kwargs)
 
-    def get_field_value(self, field_name, value):
+    def get_field_value(self, field_name, value, kwargs):
+        kwargs['is_modified'] = value.is_modified_field(field_name)
         return getattr(value, field_name)
 
     def _internal_is_valid(self, value, *args, **kwargs):
