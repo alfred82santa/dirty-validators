@@ -9,6 +9,8 @@ setup(
     packages=['dirty_validators'],
     include_package_data=True,
     test_suite="nose.collector",
+    description="Validate library for python 3",
+    long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
     tests_require="nose",
     zip_safe=True,
 )
