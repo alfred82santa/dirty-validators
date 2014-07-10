@@ -409,10 +409,8 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
         super(ModelValidate, self).__init__(*args, **kwargs)
 
     def get_field_value(self, field_name, value, kwargs):
-        try:
-            kwargs['is_modified'] = value.is_modified_field(field_name)
-        except:
-            pass
+        kwargs['is_modified'] = value.is_modified_field(field_name)
+
         try:
             return getattr(value, field_name)
         except AttributeError:

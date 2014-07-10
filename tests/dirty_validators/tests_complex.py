@@ -660,3 +660,20 @@ class TestModelValidate(TestCase):
         self.assertFalse(self.validator.is_valid(FakeModelInner()), self.validator.messages)
         self.assertDictEqual(self.validator.messages,
                              {'notModel': "'FakeModelInner({})' is not an instance of FakeModel"})
+
+    def test_validate_wrong_field_fail(self):
+        class FakeModel(BaseModel):
+            pass
+
+        class FakeModelValidate(ModelValidate):
+            __modelclass__ = FakeModel
+
+            fieldName1 = Optional(validators=[Length(min=4, max=6)])
+            fieldName2 = Optional(validators=[Length(min=1, max=2)])
+            fieldName3 = Required(validators=[Length(min=7, max=8)])
+            fieldTree1 = Required(validators=[FakeModelInnerValidate()])
+
+        validator = FakeModelValidate()
+        self.assertFalse(validator.is_valid(FakeModel()), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fieldName3': {'required': 'Value is required and can not be empty'}})
