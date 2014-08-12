@@ -5,7 +5,7 @@ setup(
     name='dirty-validators',
     url='https://github.com/alfred82santa/dirty-validators',
     author='alfred82santa',
-    version='0.1.5',
+    version='0.1.6',
     author_email='alfred82santa@gmail.com',
     packages=['dirty_validators'],
     include_package_data=True,

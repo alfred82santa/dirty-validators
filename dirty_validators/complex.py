@@ -410,7 +410,11 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
 
     def get_field_value(self, field_name, value, kwargs):
         kwargs['is_modified'] = value.is_modified_field(field_name)
-        return getattr(value, field_name)
+
+        try:
+            return getattr(value, field_name)
+        except AttributeError:
+            return None
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if not isinstance(value, self.__modelclass__):
