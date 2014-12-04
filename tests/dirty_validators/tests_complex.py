@@ -3,7 +3,7 @@ from unittest import TestCase
 from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
-                                      DictValidate, Required, Optional, ModelValidate, ItemLimitedOccuerrences)
+                                      DictValidate, Required, Optional, ModelValidate, ItemLimitedOccurrences)
 from collections import OrderedDict
 from dirty_models.models import BaseModel
 from dirty_models.fields import StringField, ModelField
@@ -178,7 +178,7 @@ class TestSomeItems(TestCase):
 class TestItemLimitedOccuerrencesDefault(TestCase):
 
     def setUp(self):
-        self.validator = ItemLimitedOccuerrences()
+        self.validator = ItemLimitedOccurrences()
 
     def test_validate_success(self):
         self.assertTrue(self.validator.is_valid([]), 'Zero elements')
@@ -199,7 +199,7 @@ class TestItemLimitedOccuerrencesDefault(TestCase):
 class TestItemLimitedOccuerrencesCustomLimits(TestCase):
 
     def setUp(self):
-        self.validator = ItemLimitedOccuerrences(min_occ=2, max_occ=3)
+        self.validator = ItemLimitedOccurrences(min_occ=2, max_occ=3)
 
     def test_validate_success(self):
         self.assertTrue(self.validator.is_valid([]), 'Zero elements')

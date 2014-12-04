@@ -142,15 +142,15 @@ class SomeItems(ListValidator):
                 self.import_messages(item_index, self.validator.messages)
             else:
                 item_pass += 1
-                if self.stop_on_fail and max != -1 and item_pass > self.max:
+                if self.stop_on_fail and self.max != -1 and item_pass > self.max:
                     self.error(self.TOO_MANY_VALID_ITEMS, value)
                     return False
 
-        if max != -1 and item_pass > self.max:
+        if self.max != -1 and item_pass > self.max:
             self.error(self.TOO_MANY_VALID_ITEMS, value)
             return False
 
-        if min != -1 and item_pass < self.min:
+        if self.min != -1 and item_pass < self.min:
             self.error(self.TOO_FEW_VALID_ITEMS, value)
             return False
 
@@ -158,7 +158,7 @@ class SomeItems(ListValidator):
         return True
 
 
-class ItemLimitedOccuerrences(BaseValidator):
+class ItemLimitedOccurrences(BaseValidator):
 
     """
     Validate whether item in list are distincts
@@ -173,7 +173,7 @@ class ItemLimitedOccuerrences(BaseValidator):
     }
 
     def __init__(self, min_occ=0, max_occ=1, *args, **kwargs):
-        super(ItemLimitedOccuerrences, self).__init__(*args, **kwargs)
+        super(ItemLimitedOccurrences, self).__init__(*args, **kwargs)
         self.min_occ = min_occ
         self.max_occ = max_occ
 
