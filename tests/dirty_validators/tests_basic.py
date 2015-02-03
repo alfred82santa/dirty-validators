@@ -565,7 +565,7 @@ class TestNotEmpty(TestCase):
     def test_validate_str_empty(self):
         self.assertFalse(self.validator.is_valid(""))
         self.assertDictEqual(self.validator.messages,
-                             {NotEmpty.NOT_EMPTY: "'' is required and can not be empty"})
+                             {NotEmpty.NOT_EMPTY: "Value can not be empty"})
 
     def test_validate_class_empty(self):
 

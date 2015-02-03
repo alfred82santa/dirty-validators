@@ -504,7 +504,7 @@ class NotEmpty(BaseValidator):
     """
     NOT_EMPTY = 'notEmpty'
 
-    error_messages = {NOT_EMPTY: "'$value' is required and can not be empty"}
+    error_messages = {NOT_EMPTY: "Value can not be empty"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
 
