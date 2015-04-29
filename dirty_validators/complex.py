@@ -308,13 +308,18 @@ class BaseSpec(ComplexValidator):
 
         self.stop_on_fail = stop_on_fail
 
+    def _internal_field_validate(self, validator, field_name, field_value, *args, **kwargs):
+        if not validator.is_valid(field_value, *args, **kwargs):
+            self.import_messages(field_name, validator.messages)
+            return False
+        return True
+
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
         for field_name, validator in self.spec.items():
             field_value = self.get_field_value(field_name, value, kwargs)
 
-            if not validator.is_valid(field_value, *args, **kwargs):
-                self.import_messages(field_name, validator.messages)
+            if not self._internal_field_validate(validator, field_name, field_value, *args, **kwargs):
                 result = False
                 if self.stop_on_fail:
                     return False
@@ -324,7 +329,7 @@ class BaseSpec(ComplexValidator):
 
 class DictValidate(BaseSpec):
 
-    INVALID_TYPE = 'notDict'
+    INVALID_TYPE = 'notDi   ct'
 
     error_messages = {
         INVALID_TYPE: "'$value' is not a dictionary",

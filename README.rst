@@ -21,7 +21,9 @@ Features
 - Python 3 package.
 - Easy to create a validator.
 - Chained validations.
+- Conditional validations.
 - Specific error control messages.
+- Dirty model integration (https://github.com/alfred82santa/dirty-models)
 - No database dependent.
 
 ************
