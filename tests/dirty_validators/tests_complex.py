@@ -659,7 +659,7 @@ class TestModelValidate(TestCase):
     def test_validate_wrong_model_fail(self):
         self.assertFalse(self.validator.is_valid(FakeModelInner()), self.validator.messages)
         self.assertDictEqual(self.validator.messages,
-                             {'notModel': "'FakeModelInner({})' is not an instance of FakeModel"})
+                             {'notModel': "'FakeModelInner()' is not an instance of FakeModel"})
 
     def test_validate_wrong_field_fail(self):
         class FakeModel(BaseModel):
