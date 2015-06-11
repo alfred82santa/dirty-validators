@@ -1,7 +1,7 @@
 from unittest import TestCase
 from dirty_validators.basic import (BaseValidator, EqualTo, NotEqualTo, StringNotContaining, Length, NumberRange,
                                     Regexp, Email, IPAddress, MacAddress, URL, UUID, AnyOf, NoneOf,
-                                    IsEmpty, NotEmpty, IsNone, NotNone)
+                                    IsEmpty, NotEmpty, NotEmptyString, IsNone, NotNone)
 import re
 
 
@@ -589,6 +589,30 @@ class TestNotEmpty(TestCase):
 
     def test_float_raises(self):
         self.assertFalse(self.validator.is_valid(0.0))
+
+
+class TestNotEmptyString(TestCase):
+
+    def setUp(self):
+        self.validator = NotEmptyString()
+
+    def test_validate_str_empty(self):
+        self.assertFalse(self.validator.is_valid(""))
+        self.assertDictEqual(self.validator.messages,
+                             {NotEmptyString.NOT_EMPTY: "Value can not be empty"})
+
+    def test_validate_str_more_whites_empty(self):
+        self.assertFalse(self.validator.is_valid("        "))
+        self.assertDictEqual(self.validator.messages,
+                             {NotEmptyString.NOT_EMPTY: "Value can not be empty"})
+
+    def test_validate_not_str(self):
+        self.assertFalse(self.validator.is_valid(3))
+        self.assertDictEqual(self.validator.messages,
+                             {NotEmptyString.NOT_STRING: "Value must be a string"})
+
+    def test_validate_not_empty(self):
+        self.assertTrue(self.validator.is_valid("Batman"))
 
 
 class TestIsNone(TestCase):
