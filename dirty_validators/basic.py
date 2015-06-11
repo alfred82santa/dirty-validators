@@ -514,6 +514,28 @@ class NotEmpty(BaseValidator):
         return True
 
 
+class NotEmptyString(NotEmpty):
+
+    """
+    Raise error when it is empty
+    """
+    NOT_EMPTY = 'notEmpty'
+    NOT_STRING = 'notString'
+
+    error_messages = {
+        NOT_EMPTY: "Value can not be empty",
+        NOT_STRING: "Value must be a string"
+    }
+
+    def _internal_is_valid(self, value, *args, **kwargs):
+
+        if not isinstance(value, str):
+            self.error(self.NOT_STRING, value)
+            return False
+
+        return super(NotEmptyString, self)._internal_is_valid(value.strip(), args, kwargs)
+
+
 class IsNone(BaseValidator):
 
     """
