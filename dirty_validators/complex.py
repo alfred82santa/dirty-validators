@@ -6,7 +6,7 @@ Complex validators
 from .basic import BaseValidator
 from dirty_validators.basic import NotNone
 from collections import OrderedDict
-from dirty_models.models import BaseModel
+from dirty_models.models import BaseModel, ListModel
 
 
 class Chain(BaseValidator):
@@ -229,7 +229,7 @@ def get_field_value_from_context(field_name, context_list):
 
         while len(field_path):
             field = field_path.pop(0)
-            if isinstance(field_value, (list, tuple)):
+            if isinstance(field_value, (list, tuple, ListModel)):
                 if field.isdigit():
                     field = int(field)
                 field_value = field_value[field]
