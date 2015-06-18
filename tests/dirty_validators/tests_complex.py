@@ -6,7 +6,7 @@ from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       DictValidate, Required, Optional, ModelValidate, ItemLimitedOccurrences)
 from collections import OrderedDict
 from dirty_models.models import BaseModel
-from dirty_models.fields import StringField, ModelField
+from dirty_models.fields import StringField, ModelField, ArrayField
 
 
 class TestChainStopOnFail(TestCase):
@@ -254,6 +254,108 @@ class TestContextField(TestCase):
         contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
                     {"fieldname1": "bbb", "fieldname2": ["asase11", "fuii11"]}]
         self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "fuii")
+
+    def test_get_first_context_list_model_field(self):
+        data_a = {
+            'fieldName1': 'aaa',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_A_0_1',
+                    'fieldName2': 'value_A_0_2',
+                    'fieldName3': 'value_A_0_3'
+                },
+                {
+                    'fieldName1': 'value_A_1_1',
+                    'fieldName2': 'value_A_1_2',
+                    'fieldName3': 'value_A_1_3'
+                }
+            ]
+        }
+        data_b = {
+            'fieldName1': 'bbb',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_B_0_1',
+                    'fieldName2': 'value_B_0_2',
+                    'fieldName3': 'value_B_0_3'
+                },
+                {
+                    'fieldName1': 'value_B_1_1',
+                    'fieldName2': 'value_B_1_2',
+                    'fieldName3': 'value_B_1_3'
+                }
+            ]
+        }
+        contexts = [FakeListModel(data_a), FakeListModel(data_b)]
+        self.assertEqual(get_field_value_from_context('fieldList1.1.fieldName2', contexts), 'value_B_1_2')
+
+    def test_get_second_context_list_model_field(self):
+        data_a = {
+            'fieldName1': 'aaa',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_A_0_1',
+                    'fieldName2': 'value_A_0_2',
+                    'fieldName3': 'value_A_0_3'
+                },
+                {
+                    'fieldName1': 'value_A_1_1',
+                    'fieldName2': 'value_A_1_2',
+                    'fieldName3': 'value_A_1_3'
+                }
+            ]
+        }
+        data_b = {
+            'fieldName1': 'bbb',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_B_0_1',
+                    'fieldName2': 'value_B_0_2',
+                    'fieldName3': 'value_B_0_3'
+                },
+                {
+                    'fieldName1': 'value_B_1_1',
+                    'fieldName2': 'value_B_1_2',
+                    'fieldName3': 'value_B_1_3'
+                }
+            ]
+        }
+        contexts = [FakeListModel(data_a), FakeListModel(data_b)]
+        self.assertEqual(get_field_value_from_context('<context>.fieldList1.1.fieldName2', contexts), 'value_A_1_2')
+
+    def test_get_context_list_model_field_fail(self):
+        data_a = {
+            'fieldName1': 'aaa',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_A_0_1',
+                    'fieldName2': 'value_A_0_2',
+                    'fieldName3': 'value_A_0_3'
+                },
+                {
+                    'fieldName1': 'value_A_1_1',
+                    'fieldName2': 'value_A_1_2',
+                    'fieldName3': 'value_A_1_3'
+                }
+            ]
+        }
+        data_b = {
+            'fieldName1': 'bbb',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_B_0_1',
+                    'fieldName2': 'value_B_0_2',
+                    'fieldName3': 'value_B_0_3'
+                },
+                {
+                    'fieldName1': 'value_B_1_1',
+                    'fieldName2': 'value_B_1_2',
+                    'fieldName3': 'value_B_1_3'
+                }
+            ]
+        }
+        contexts = [FakeListModel(data_a), FakeListModel(data_b)]
+        self.assertIsNone(get_field_value_from_context('<context>.fieldList1.3.fieldName2', contexts))
 
     def test_get_list_field_fail(self):
         contexts = [{"fieldname1": "asa", "fieldname2": ["asase", "fuii"]},
@@ -563,6 +665,12 @@ class FakeModel(BaseModel):
     fieldName2 = StringField()
     fieldName3 = StringField()
     fieldTree1 = ModelField(model_class=FakeModelInner)
+
+
+class FakeListModel(BaseModel):
+
+    fieldName1 = StringField()
+    fieldList1 = ArrayField(field_type=ModelField(model_class=FakeModelInner))
 
 
 class FakeModelInnerValidate(ModelValidate):
