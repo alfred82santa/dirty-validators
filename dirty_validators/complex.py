@@ -247,7 +247,7 @@ def get_field_value_from_context(field_name, context_list):
                 field_value = getattr(field_value, field)
 
         return field_value
-    except (IndexError, AttributeError, KeyError):
+    except (IndexError, AttributeError, KeyError, TypeError):
         return None
 
 
