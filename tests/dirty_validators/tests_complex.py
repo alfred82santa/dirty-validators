@@ -182,12 +182,12 @@ class TestItemLimitedOccuerrencesDefault(TestCase):
     def test_validate_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'aaa', 'bbb', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                           "Item 'aaa' is repeated to many times. Limit is 1."})
+                                                       "Item 'aaa' is repeated to many times. Limit is 1."})
 
     def test_validate_fail_2(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                           "Item 'ccc' is repeated to many times. Limit is 1."})
+                                                       "Item 'ccc' is repeated to many times. Limit is 1."})
 
 
 class TestItemLimitedOccuerrencesCustomLimits(TestCase):
@@ -202,12 +202,12 @@ class TestItemLimitedOccuerrencesCustomLimits(TestCase):
     def test_validate_too_few_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooFewItemOccurrences':
-                                                           "Item 'aaa' is not enough repeated. Limit is 2."})
+                                                       "Item 'aaa' is not enough repeated. Limit is 2."})
 
     def test_validate_too_many_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                           "Item 'ccc' is repeated to many times. Limit is 3."})
+                                                       "Item 'ccc' is repeated to many times. Limit is 3."})
 
 
 class TestContextField(TestCase):
@@ -438,7 +438,6 @@ class TestContextField(TestCase):
         self.assertIsNone(get_field_value_from_context('<root>.fieldList1.3.fieldName2', contexts))
 
 
-
 class TestIfField(TestCase):
     def setUp(self):
         self.validator = IfField(validator=Length(min=4, max=6),
@@ -524,7 +523,7 @@ class TestDictValidate(TestCase):
                                                   "fieldName3": "abcedef"}))
         self.assertDictEqual(self.validator.messages,
                              {'fieldName1': {Length.TOO_SHORT:
-                                                 "'af' is less than 4 unit length",
+                                             "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
                                                  "Some validate error due to field 'fieldName1' has value 'af'."}})
 
@@ -566,7 +565,7 @@ class TestDictValidate(TestCase):
                                                   "fieldName3": "abcedddddef"}))
         self.assertDictEqual(self.validator.messages,
                              {'fieldName1': {Length.TOO_SHORT:
-                                                 "'af' is less than 4 unit length",
+                                             "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
                                                  "Some validate error due to field 'fieldName1' has value 'af'."}})
 
@@ -588,7 +587,7 @@ class TestDictValidate(TestCase):
                                                   "fieldName3": "abcedddddef"}))
         self.assertDictEqual(self.validator.messages,
                              {'fieldName1': {Length.TOO_SHORT:
-                                                 "'af' is less than 4 unit length",
+                                             "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
                                                  "Some validate error due to field 'fieldName1' has value 'af'."},
                               'fieldName2': {Length.TOO_LONG: "'asasasasas' is more than 2 unit length"},
@@ -877,4 +876,3 @@ class TestHashMapModelValidate(TestCase):
         self.assertDictEqual(validator.messages,
                              {'fakeName1': {'notMatch': "'fakeName1' does not match against pattern '^field'"},
                               'invalidKey': "'fakeName1' is not a valid key"})
-

@@ -503,7 +503,7 @@ class NoneOf(BaseValidator):
         super(NoneOf, self).__init__(*args, **kwargs)
         self.values = values
         if values_formatter is None:
-            values_formatter = lambda v: ', '.join(str(x) if not isinstance(x, str) else "'%s'" % x for x in values)
+            def values_formatter(v): return ', '.join(str(x) if not isinstance(x, str) else "'%s'" % x for x in values)
         self.values_formatter = values_formatter
 
     def _internal_is_valid(self, value, *args, **kwargs):

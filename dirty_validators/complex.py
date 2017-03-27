@@ -476,4 +476,3 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
             return False
 
         return super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
-
