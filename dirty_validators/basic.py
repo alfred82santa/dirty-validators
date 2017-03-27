@@ -5,7 +5,40 @@ from string import Template
 import re
 
 
-class BaseValidator:
+class ValidatorMetaclass(type):
+
+    def __new__(cls, name, bases, classdict):
+
+        def pop_field_dict(fieldname):
+            try:
+                return classdict.pop(fieldname)
+            except KeyError:
+                return {}
+
+        error_code_map = pop_field_dict('error_code_map')
+        error_messages = pop_field_dict('error_messages')
+        message_values = pop_field_dict('message_values')
+
+        result = super(ValidatorMetaclass, cls).__new__(
+            cls, name, bases, classdict)
+
+        def push_field_dict(fieldname, value):
+            try:
+                original_value = getattr(result, fieldname).copy()
+                original_value.update(value)
+            except AttributeError:
+                original_value = value
+            setattr(result, fieldname, original_value)
+
+        push_field_dict('error_code_map', error_code_map)
+        push_field_dict('error_messages', error_messages)
+        push_field_dict('message_values', message_values)
+
+        return result
+
+
+class BaseValidator(metaclass=ValidatorMetaclass):
+
     error_code_map = {}
     error_messages = {}
     message_values = {}

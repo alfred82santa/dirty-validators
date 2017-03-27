@@ -1,10 +1,10 @@
 |travis-master| |coverall-master|
 
 .. |travis-master| image:: https://travis-ci.org/alfred82santa/dirty-validators.svg?branch=master
-    :target: https://travis-ci.org/alfred82santa/dirty-validators
+:target: https://travis-ci.org/alfred82santa/dirty-validators
 
-.. |coverall-master| image:: https://coveralls.io/repos/alfred82santa/dirty-validators/badge.png?branch=master 
-    :target: https://coveralls.io/r/alfred82santa/dirty-validators?branch=master
+.. |coverall-master| image:: https://coveralls.io/repos/alfred82santa/dirty-validators/badge.png?branch=master
+:target: https://coveralls.io/r/alfred82santa/dirty-validators?branch=master
 
 ================
 dirty-validators
@@ -25,6 +25,17 @@ Features
 - Specific error control messages.
 - Dirty model integration (https://github.com/alfred82santa/dirty-models)
 - No database dependent.
+
+*********
+Changelog
+*********
+
+-------------
+Version 0.4.0
+-------------
+
+- Added ``<root>``  keyword in order to look up a field from root model of context.
+- Added ``key_validator`` argument for spec validators in order to validate keys on hashmaps.
 
 ************
 Installation
@@ -69,6 +80,5 @@ Basic usage
     assert validator_model.is_valid(FakeModel(data)) is True
 
 .. note::
+
     Look at tests for more examples
-
-
