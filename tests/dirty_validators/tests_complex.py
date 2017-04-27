@@ -1,16 +1,16 @@
 from unittest import TestCase
 
+from collections import OrderedDict
+from dirty_models.fields import StringField, ModelField, ArrayField
+from dirty_models.models import BaseModel, HashMapModel
+
 from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
 from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
                                       get_field_value_from_context, IfField,
                                       DictValidate, Required, Optional, ModelValidate, ItemLimitedOccurrences)
-from collections import OrderedDict
-from dirty_models.models import BaseModel
-from dirty_models.fields import StringField, ModelField, ArrayField
 
 
 class TestChainStopOnFail(TestCase):
-
     def setUp(self):
         self.validator = Chain(validators=[Length(min=14, max=16), Regexp(regex='^abc'), Email()])
 
@@ -43,7 +43,6 @@ class TestChainStopOnFail(TestCase):
 
 
 class TestChainDontStopOnFail(TestCase):
-
     def setUp(self):
         self.validator = Chain(validators=[Length(min=14, max=16), Regexp(regex='^abc'), Email()], stop_on_fail=False)
 
@@ -63,7 +62,6 @@ class TestChainDontStopOnFail(TestCase):
 
 
 class TestSome(TestCase):
-
     def setUp(self):
         self.validator = Some(validators=[Regexp(regex='^cba'),
                                           Regexp(regex='^abc', error_code_map={Regexp.NOT_MATCH: 'ouch'}),
@@ -93,7 +91,6 @@ class TestSome(TestCase):
 
 
 class TestAllItemsStopOnFail(TestCase):
-
     def setUp(self):
         self.validator = AllItems(validator=Length(min=14, max=16))
 
@@ -127,7 +124,6 @@ class TestAllItemsStopOnFail(TestCase):
 
 
 class TestAllItemsDontStopOnFail(TestCase):
-
     def setUp(self):
         self.validator = AllItems(validator=Length(min=14, max=16), stop_on_fail=False)
 
@@ -143,7 +139,6 @@ class TestAllItemsDontStopOnFail(TestCase):
 
 
 class TestSomeItems(TestCase):
-
     def setUp(self):
         self.validator = SomeItems(min=2, max=3, validator=Length(min=4, max=6))
 
@@ -176,7 +171,6 @@ class TestSomeItems(TestCase):
 
 
 class TestItemLimitedOccuerrencesDefault(TestCase):
-
     def setUp(self):
         self.validator = ItemLimitedOccurrences()
 
@@ -188,16 +182,15 @@ class TestItemLimitedOccuerrencesDefault(TestCase):
     def test_validate_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'aaa', 'bbb', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                       "Item 'aaa' is repeated to many times. Limit to 1."})
+                                                       "Item 'aaa' is repeated to many times. Limit is 1."})
 
     def test_validate_fail_2(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                       "Item 'ccc' is repeated to many times. Limit to 1."})
+                                                       "Item 'ccc' is repeated to many times. Limit is 1."})
 
 
 class TestItemLimitedOccuerrencesCustomLimits(TestCase):
-
     def setUp(self):
         self.validator = ItemLimitedOccurrences(min_occ=2, max_occ=3)
 
@@ -209,16 +202,15 @@ class TestItemLimitedOccuerrencesCustomLimits(TestCase):
     def test_validate_too_few_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooFewItemOccurrences':
-                                                       "Item 'aaa' is not enough repeated. Limit to 2."})
+                                                       "Item 'aaa' is not enough repeated. Limit is 2."})
 
     def test_validate_too_many_fail(self):
         self.assertFalse(self.validator.is_valid(['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc', 'ccc']))
         self.assertDictEqual(self.validator.messages, {'tooManyItemOccurrences':
-                                                       "Item 'ccc' is repeated to many times. Limit to 3."})
+                                                       "Item 'ccc' is repeated to many times. Limit is 3."})
 
 
 class TestContextField(TestCase):
-
     def test_get_first_context_root_field(self):
         contexts = [{"fieldname1": "asa"}, {"fieldname1": "bbb"}]
         self.assertEqual(get_field_value_from_context('fieldname1', contexts), "bbb")
@@ -377,9 +369,76 @@ class TestContextField(TestCase):
                     {"fieldname1": "bbb", "fieldname2": {1: "asase11", 2: "fuii11"}}]
         self.assertEqual(get_field_value_from_context('<context>.fieldname2.1', contexts), "asase")
 
+    def test_get_root_context_list_model_field(self):
+        data_a = {
+            'fieldName1': 'aaa',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_A_0_1',
+                    'fieldName2': 'value_A_0_2',
+                    'fieldName3': 'value_A_0_3'
+                },
+                {
+                    'fieldName1': 'value_A_1_1',
+                    'fieldName2': 'value_A_1_2',
+                    'fieldName3': 'value_A_1_3'
+                }
+            ]
+        }
+        data_b = {
+            'fieldName1': 'bbb',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_B_0_1',
+                    'fieldName2': 'value_B_0_2',
+                    'fieldName3': 'value_B_0_3'
+                },
+                {
+                    'fieldName1': 'value_B_1_1',
+                    'fieldName2': 'value_B_1_2',
+                    'fieldName3': 'value_B_1_3'
+                }
+            ]
+        }
+        contexts = [FakeListModel(data_a), FakeListModel(data_b)]
+        self.assertEqual(get_field_value_from_context('<root>.fieldList1.1.fieldName2', contexts), 'value_A_1_2')
+
+    def test_get_root_context_list_model_field_fail(self):
+        data_a = {
+            'fieldName1': 'aaa',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_A_0_1',
+                    'fieldName2': 'value_A_0_2',
+                    'fieldName3': 'value_A_0_3'
+                },
+                {
+                    'fieldName1': 'value_A_1_1',
+                    'fieldName2': 'value_A_1_2',
+                    'fieldName3': 'value_A_1_3'
+                }
+            ]
+        }
+        data_b = {
+            'fieldName1': 'bbb',
+            'fieldList1': [
+                {
+                    'fieldName1': 'value_B_0_1',
+                    'fieldName2': 'value_B_0_2',
+                    'fieldName3': 'value_B_0_3'
+                },
+                {
+                    'fieldName1': 'value_B_1_1',
+                    'fieldName2': 'value_B_1_2',
+                    'fieldName3': 'value_B_1_3'
+                }
+            ]
+        }
+        contexts = [FakeListModel(data_a), FakeListModel(data_b)]
+        self.assertIsNone(get_field_value_from_context('<root>.fieldList1.3.fieldName2', contexts))
+
 
 class TestIfField(TestCase):
-
     def setUp(self):
         self.validator = IfField(validator=Length(min=4, max=6),
                                  field_name='fieldname1',
@@ -432,7 +491,6 @@ class TestIfField(TestCase):
 
 
 class TestDictValidate(TestCase):
-
     def setUp(self):
         self.validator = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
                                                                   field_validator=NotNone(),
@@ -467,7 +525,7 @@ class TestDictValidate(TestCase):
                              {'fieldName1': {Length.TOO_SHORT:
                                              "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
-                                             "Some validate error due to field 'fieldName1' has value 'af'."}})
+                                                 "Some validate error due to field 'fieldName1' has value 'af'."}})
 
     def test_validate_second_optional_success(self):
         self.assertTrue(self.validator.is_valid({"fieldName2": "ab",
@@ -509,7 +567,7 @@ class TestDictValidate(TestCase):
                              {'fieldName1': {Length.TOO_SHORT:
                                              "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
-                                             "Some validate error due to field 'fieldName1' has value 'af'."}})
+                                                 "Some validate error due to field 'fieldName1' has value 'af'."}})
 
     def test_validate_all_dont_stop_on_fail_fail(self):
         self.validator = DictValidate(spec=OrderedDict([("fieldName1", IfField(field_name="fieldName1",
@@ -531,13 +589,12 @@ class TestDictValidate(TestCase):
                              {'fieldName1': {Length.TOO_SHORT:
                                              "'af' is less than 4 unit length",
                                              IfField.NEEDS_VALIDATE:
-                                             "Some validate error due to field 'fieldName1' has value 'af'."},
+                                                 "Some validate error due to field 'fieldName1' has value 'af'."},
                               'fieldName2': {Length.TOO_LONG: "'asasasasas' is more than 2 unit length"},
                               'fieldName3': {Length.TOO_LONG: "'abcedddddef' is more than 8 unit length"}})
 
 
 class TestDictTreeValidate(TestCase):
-
     def setUp(self):
         dicttree1 = DictValidate(spec={"fieldName1": IfField(field_name="fieldName1",
                                                              field_validator=NotNone(),
@@ -562,7 +619,8 @@ class TestDictTreeValidate(TestCase):
                                                                   validator=Length(min=1, max=2)),
                                             "fieldName3": Chain(validators=[NotNone(),
                                                                             Length(min=7, max=8)]),
-                                            "fieldTree1": Chain(validators=[NotEmpty(), dicttree1])})
+                                            "fieldTree1": Chain(validators=[NotEmpty(), dicttree1])},
+                                      key_validator=Regexp(regex='^field'))
 
     def test_validate_only_required_success(self):
         data = {
@@ -597,9 +655,24 @@ class TestDictTreeValidate(TestCase):
         self.assertFalse(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {'fieldTree1.fieldName2': {'notNone': 'Value must not be None'}})
 
+    def test_validate_keys_fail(self):
+        data = {
+            "fieldName2": "12",
+            "fakeField": "123456qw",
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(data), self.validator.messages)
+        self.assertDictEqual(self.validator.messages,
+                             {'invalidKey': "'fakeField' is not a valid key",
+                              'fakeField': {'notMatch': "'fakeField' does not match against pattern '^field'"}},
+                             self.validator.messages)
+
 
 class TestRequiredValidate(TestCase):
-
     def setUp(self):
         self.validator = Required(validators=[Length(min=7, max=8)])
 
@@ -626,7 +699,6 @@ class TestRequiredValidate(TestCase):
 
 
 class TestOptionalValidate(TestCase):
-
     def setUp(self):
         self.validator = Optional(validators=[Length(min=7, max=8)])
 
@@ -653,14 +725,12 @@ class TestOptionalValidate(TestCase):
 
 
 class FakeModelInner(BaseModel):
-
     fieldName1 = StringField()
     fieldName2 = StringField()
     fieldName3 = StringField()
 
 
 class FakeModel(BaseModel):
-
     fieldName1 = StringField()
     fieldName2 = StringField()
     fieldName3 = StringField()
@@ -668,7 +738,6 @@ class FakeModel(BaseModel):
 
 
 class FakeListModel(BaseModel):
-
     fieldName1 = StringField()
     fieldList1 = ArrayField(field_type=ModelField(model_class=FakeModelInner))
 
@@ -691,7 +760,6 @@ class FakeModelValidate(ModelValidate):
 
 
 class TestModelValidate(TestCase):
-
     def setUp(self):
         self.validator = FakeModelValidate()
 
@@ -783,5 +851,28 @@ class TestModelValidate(TestCase):
 
         validator = FakeModelValidate()
         self.assertFalse(validator.is_valid(FakeModel()), validator.messages)
+
         self.assertDictEqual(validator.messages,
                              {'fieldName3': {'required': 'Value is required and can not be empty'}})
+
+
+class TestHashMapModelValidate(TestCase):
+
+    def test_key_validate(self):
+
+        model = HashMapModel(data={'fieldName1': 1,
+                                   'fieldName2': 2})
+
+        validator = ModelValidate(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_key_validate_fail(self):
+
+        model = HashMapModel(data={'fakeName1': 1,
+                                   'fieldName2': 2})
+
+        validator = ModelValidate(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fakeName1': {'notMatch': "'fakeName1' does not match against pattern '^field'"},
+                              'invalidKey': "'fakeName1' is not a valid key"})

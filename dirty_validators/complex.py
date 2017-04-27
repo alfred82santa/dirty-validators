@@ -4,7 +4,7 @@ Validators library
 Complex validators
 """
 from .basic import BaseValidator
-from dirty_validators.basic import NotNone
+from dirty_validators.basic import NotNone, ValidatorMetaclass
 from collections import OrderedDict
 from dirty_models.models import BaseModel, ListModel
 
@@ -168,8 +168,8 @@ class ItemLimitedOccurrences(BaseValidator):
     TOO_FEW_ITEM_OCCURRENCES = 'tooFewItemOccurrences'
 
     error_messages = {
-        TOO_MANY_ITEM_OCCURRENCES: "Item '$value' is repeated to many times. Limit to $max_occ.",
-        TOO_FEW_ITEM_OCCURRENCES: "Item '$value' is not enough repeated. Limit to $min_occ.",
+        TOO_MANY_ITEM_OCCURRENCES: "Item '$value' is repeated to many times. Limit is $max_occ.",
+        TOO_FEW_ITEM_OCCURRENCES: "Item '$value' is not enough repeated. Limit is $min_occ.",
     }
 
     def __init__(self, min_occ=0, max_occ=1, *args, **kwargs):
@@ -217,12 +217,18 @@ def get_field_value_from_context(field_name, context_list):
     Helper to get field value from string path.
     String '<context>' is used to go up on context stack. It just
     can be used at the beginning of path: <context>.<context>.field_name_1
+    On the other hand, '<root>' is used to start lookup from first item on context.
     """
     field_path = field_name.split('.')
-    context_index = -1
-    while field_path[0] == '<context>':
-        context_index -= 1
+
+    if field_path[0] == '<root>':
+        context_index = 0
         field_path.pop(0)
+    else:
+        context_index = -1
+        while field_path[0] == '<context>':
+            context_index -= 1
+            field_path.pop(0)
 
     try:
         field_value = context_list[context_index]
@@ -254,7 +260,7 @@ def get_field_value_from_context(field_name, context_list):
 class IfField(BaseValidator):
 
     """
-    Conditional validator. It run validators if a specific field value pass validations.
+    Conditional validator. It runs validators if a specific field value pass validations.
     """
 
     NEEDS_VALIDATE = 'needsValidate'
@@ -295,7 +301,15 @@ class BaseSpec(ComplexValidator):
     Base class to use spec
     """
 
-    def __init__(self, spec=None, stop_on_fail=True, *args, **kwargs):
+    INVALID_KEY = 'invalidKey'
+
+    error_messages = {
+        INVALID_KEY: "'$value' is not a valid key",
+    }
+
+    key_validator = None
+
+    def __init__(self, spec=None, stop_on_fail=True, key_validator=None, *args, **kwargs):
         super(BaseSpec, self).__init__(*args, **kwargs)
 
         if spec is not None:
@@ -308,14 +322,35 @@ class BaseSpec(ComplexValidator):
 
         self.stop_on_fail = stop_on_fail
 
+        if key_validator:
+            self.key_validator = key_validator
+
     def _internal_field_validate(self, validator, field_name, field_value, *args, **kwargs):
+
         if not validator.is_valid(field_value, *args, **kwargs):
             self.import_messages(field_name, validator.messages)
             return False
         return True
 
+    def _internal_validate_keys(self, keys, *args, **kwargs):
+        result = True
+        for k in keys:
+            if self.key_validator.is_valid(k, *args, **kwargs):
+                continue
+            self.error(self.INVALID_KEY, k)
+            self.import_messages(k, self.key_validator.messages)
+            result = False
+            if self.stop_on_fail:
+                return False
+        return result
+
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
+        if self.key_validator and not self._internal_validate_keys(self._get_keys(value), *args, **kwargs):
+            result = False
+            if self.stop_on_fail:
+                return False
+
         for field_name, validator in self.spec.items():
             field_value = self.get_field_value(field_name, value, kwargs)
 
@@ -329,7 +364,7 @@ class BaseSpec(ComplexValidator):
 
 class DictValidate(BaseSpec):
 
-    INVALID_TYPE = 'notDi   ct'
+    INVALID_TYPE = 'notDict'
 
     error_messages = {
         INVALID_TYPE: "'$value' is not a dictionary",
@@ -338,10 +373,14 @@ class DictValidate(BaseSpec):
     def get_field_value(self, field_name, value, kwargs):
         return value.get(field_name, None)
 
+    def _get_keys(self, value):
+        return value.keys()
+
     def _internal_is_valid(self, value, *args, **kwargs):
         if not isinstance(value, dict):
             self.error(self.INVALID_TYPE, value)
             return False
+
         return super(DictValidate, self)._internal_is_valid(value, *args, **kwargs)
 
 
@@ -378,14 +417,13 @@ class Optional(Chain):
         return Chain._internal_is_valid(self, value, *args, **kwargs)
 
 
-class ModelValidateMetaclass(type):
+class ModelValidateMetaclass(ValidatorMetaclass):
 
     @classmethod
     def __prepare__(metacls, name, bases):  # No keywords in this case
         return OrderedDict()
 
     def __new__(cls, name, bases, classdict):
-
         result = super(ModelValidateMetaclass, cls).__new__(
             cls, name, bases, classdict)
 
@@ -406,11 +444,19 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
         INVALID_MODEL: "'$value' is not an instance of $model",
     }
 
+    def _get_real_fieldname(self, fieldname):
+        try:
+            return self.__modelclass__.get_field_obj(fieldname).name
+        except AttributeError:
+            return fieldname
+
     def __init__(self, spec=None, *args, **kwargs):
         self.spec = self.spec.copy()
         if spec is not None:
             self.spec.update(spec)
 
+        self.spec = OrderedDict((self._get_real_fieldname(fieldname), validator)
+                                for fieldname, validator in self.spec.items())
         super(ModelValidate, self).__init__(*args, **kwargs)
 
     def get_field_value(self, field_name, value, kwargs):
@@ -420,6 +466,9 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
             return getattr(value, field_name)
         except AttributeError:
             return None
+
+    def _get_keys(self, value):
+        return value.get_fields()
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if not isinstance(value, self.__modelclass__):
