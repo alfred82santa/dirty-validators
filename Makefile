@@ -37,7 +37,7 @@ clean:
 
 flake:
 	@echo "Running flake8 tests..."
-	flake8 $PACKAGE_COVERAGE
+	flake8 $(PACKAGE_COVERAGE)
 	flake8 tests
 
 autopep:
