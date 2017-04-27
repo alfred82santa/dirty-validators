@@ -3,8 +3,7 @@ Validators library
 
 Complex validators
 """
-from .basic import BaseValidator
-from dirty_validators.basic import NotNone, ValidatorMetaclass
+from .basic import BaseValidator, NotNone, ValidatorMetaclass
 from collections import OrderedDict
 from dirty_models.models import BaseModel, ListModel
 
