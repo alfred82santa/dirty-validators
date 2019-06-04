@@ -4,3 +4,4 @@ coverage
 nose
 autopep8
 dirty-models
+aiounittest
