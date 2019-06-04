@@ -1,44 +1,56 @@
 """
 Validators library
 """
-from string import Template
 import re
+from string import Template
 
 
 class ValidatorMetaclass(type):
 
     def __new__(cls, name, bases, classdict):
+        error_code_map = {}
+        error_messages = {}
+        message_values = {}
 
-        def pop_field_dict(fieldname):
+        for base in reversed(bases):
             try:
-                return classdict.pop(fieldname)
-            except KeyError:
-                return {}
-
-        error_code_map = pop_field_dict('error_code_map')
-        error_messages = pop_field_dict('error_messages')
-        message_values = pop_field_dict('message_values')
-
-        result = super(ValidatorMetaclass, cls).__new__(
-            cls, name, bases, classdict)
-
-        def push_field_dict(fieldname, value):
-            try:
-                original_value = getattr(result, fieldname).copy()
-                original_value.update(value)
+                error_code_map.update(base.error_code_map)
             except AttributeError:
-                original_value = value
-            setattr(result, fieldname, original_value)
+                pass
 
-        push_field_dict('error_code_map', error_code_map)
-        push_field_dict('error_messages', error_messages)
-        push_field_dict('message_values', message_values)
+            try:
+                error_messages.update(base.error_messages)
+            except AttributeError:
+                pass
 
-        return result
+            try:
+                message_values.update(base.message_values)
+            except AttributeError:
+                pass
+
+        try:
+            error_code_map.update(classdict.pop('error_code_map'))
+        except KeyError:
+            pass
+
+        try:
+            error_messages.update(classdict.pop('error_messages'))
+        except KeyError:
+            pass
+
+        try:
+            message_values.update(classdict.pop('message_values'))
+        except KeyError:
+            pass
+
+        classdict['error_code_map'] = error_code_map
+        classdict['error_messages'] = error_messages
+        classdict['message_values'] = message_values
+
+        return super(ValidatorMetaclass, cls).__new__(cls, name, bases, classdict)
 
 
 class BaseValidator(metaclass=ValidatorMetaclass):
-
     error_code_map = {}
     error_messages = {}
     message_values = {}
@@ -102,7 +114,6 @@ class BaseValidator(metaclass=ValidatorMetaclass):
 
 
 class EqualTo(BaseValidator):
-
     """
     Compares value with a static value.
     """
@@ -126,7 +137,6 @@ class EqualTo(BaseValidator):
 
 
 class NotEqualTo(BaseValidator):
-
     """
     Checks whether a value is distinct of static value.
     """
@@ -150,7 +160,6 @@ class NotEqualTo(BaseValidator):
 
 
 class StringNotContaining(BaseValidator):
-
     """
     Checks that the value does not contain a static substring
     """
@@ -169,7 +178,7 @@ class StringNotContaining(BaseValidator):
         self.message_values.update({'token': self.token})
 
     def _internal_is_valid(self, value, *args, **kwargs):
-        if (not self.case_sensitive and (self.token.lower() not in value.lower())) or\
+        if (not self.case_sensitive and (self.token.lower() not in value.lower())) or \
                 (self.case_sensitive and (self.token not in value)):
             return True
 
@@ -178,7 +187,6 @@ class StringNotContaining(BaseValidator):
 
 
 class Length(BaseValidator):
-
     """
     Validates the length of a string.
 
@@ -211,11 +219,11 @@ class Length(BaseValidator):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         try:
-            l = len(value) or 0
-            if l < self.min:
+            length = len(value) or 0
+            if length < self.min:
                 self.error(self.TOO_SHORT, value)
                 return False
-            if self.max != -1 and l > self.max:
+            if self.max != -1 and length > self.max:
                 self.error(self.TOO_LONG, value)
                 return False
             return True
@@ -225,7 +233,6 @@ class Length(BaseValidator):
 
 
 class NumberRange(BaseValidator):
-
     """
     Validates that a number is of a minimum and/or maximum value, inclusive.
     This will work with any comparable number type, such as floats and
@@ -261,7 +268,6 @@ class NumberRange(BaseValidator):
 
 
 class Regexp(BaseValidator):
-
     """
     Validates the field against a user provided regexp.
 
@@ -298,7 +304,6 @@ class Regexp(BaseValidator):
 
 
 class Email(Regexp):
-
     """
     Validates an email address. Note that this uses a very primitive regular
     expression and should only be used in instances where you later verify by
@@ -314,7 +319,6 @@ class Email(Regexp):
 
 
 class IPAddress(BaseValidator):
-
     """
     Validates an IP address.
 
@@ -400,7 +404,6 @@ class IPAddress(BaseValidator):
 
 
 class MacAddress(Regexp):
-
     """
     Validates a MAC address.
     """
@@ -414,7 +417,6 @@ class MacAddress(Regexp):
 
 
 class URL(Regexp):
-
     """
     Simple regexp based url validation. Much like the email validator, you
     probably want to validate the url later by other means if the url must
@@ -438,7 +440,6 @@ class URL(Regexp):
 
 
 class UUID(Regexp):
-
     """
     Validates a UUID.
     """
@@ -453,7 +454,6 @@ class UUID(Regexp):
 
 
 class AnyOf(BaseValidator):
-
     """
     Compares the incoming data to a sequence of valid inputs.
 
@@ -485,7 +485,6 @@ class AnyOf(BaseValidator):
 
 
 class NoneOf(BaseValidator):
-
     """
     Compares the incoming data to a sequence of invalid inputs.
 
@@ -514,7 +513,6 @@ class NoneOf(BaseValidator):
 
 
 class IsEmpty(BaseValidator):
-
     """
     Compares the incoming value with an empty one
     """
@@ -523,7 +521,6 @@ class IsEmpty(BaseValidator):
     error_messages = {EMPTY: "'$value' must be empty"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
-
         if value:
             self.error(self.EMPTY, value)
             return False
@@ -531,7 +528,6 @@ class IsEmpty(BaseValidator):
 
 
 class NotEmpty(BaseValidator):
-
     """
     Raise error when it is empty
     """
@@ -540,7 +536,6 @@ class NotEmpty(BaseValidator):
     error_messages = {NOT_EMPTY: "Value can not be empty"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
-
         if not value:
             self.error(self.NOT_EMPTY, value)
             return False
@@ -548,7 +543,6 @@ class NotEmpty(BaseValidator):
 
 
 class NotEmptyString(NotEmpty):
-
     """
     Raise error when it is empty
     """
@@ -561,7 +555,6 @@ class NotEmptyString(NotEmpty):
     }
 
     def _internal_is_valid(self, value, *args, **kwargs):
-
         if not isinstance(value, str):
             self.error(self.NOT_STRING, value)
             return False
@@ -570,7 +563,6 @@ class NotEmptyString(NotEmpty):
 
 
 class IsNone(BaseValidator):
-
     """
     Raise error if it is not None
     """
@@ -580,7 +572,6 @@ class IsNone(BaseValidator):
     error_messages = {NONE: "'$value' must be None"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
-
         if value is not None:
             self.error(self.NONE, value)
             return False
@@ -588,7 +579,6 @@ class IsNone(BaseValidator):
 
 
 class NotNone(BaseValidator):
-
     """
     Raise error if it is None
     """
@@ -598,7 +588,6 @@ class NotNone(BaseValidator):
     error_messages = {NOT_NONE: "Value must not be None"}
 
     def _internal_is_valid(self, value, *args, **kwargs):
-
         if value is None:
             self.error(self.NOT_NONE, value)
             return False

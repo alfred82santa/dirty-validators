@@ -3,22 +3,25 @@ Validators library
 
 Complex validators
 """
-from .basic import BaseValidator, NotNone, ValidatorMetaclass
 from collections import OrderedDict
+
 from dirty_models.models import BaseModel, ListModel
 
+from .basic import BaseValidator, NotNone, ValidatorMetaclass
 
-class Chain(BaseValidator):
 
-    """
-    Use a chain of validators for one value
-    """
-
+class ChainMixin:
     def __init__(self, validators=None, stop_on_fail=True, *args, **kwargs):
-        super(Chain, self).__init__(*args, **kwargs)
+        super(ChainMixin, self).__init__(*args, **kwargs)
 
         self.stop_on_fail = stop_on_fail
         self.validators = validators.copy() if validators is not None else []
+
+
+class Chain(ChainMixin, BaseValidator):
+    """
+    Use a chain of validators for one value
+    """
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
@@ -31,16 +34,17 @@ class Chain(BaseValidator):
         return result
 
 
-class Some(BaseValidator):
+class SomeMixin(metaclass=ValidatorMetaclass):
+    def __init__(self, validators=None, *args, **kwargs):
+        super(SomeMixin, self).__init__(*args, **kwargs)
 
+        self.validators = validators.copy() if validators is not None else []
+
+
+class Some(SomeMixin, BaseValidator):
     """
     Pass some validators for one value
     """
-
-    def __init__(self, validators=None, *args, **kwargs):
-        super(Some, self).__init__(*args, **kwargs)
-
-        self.validators = validators.copy() if validators is not None else []
 
     def _internal_is_valid(self, value, *args, **kwargs):
         messages = {}
@@ -53,8 +57,20 @@ class Some(BaseValidator):
         return False
 
 
-class ComplexValidator(BaseValidator):
+class ComplexValidatorMixin(metaclass=ValidatorMetaclass):
+    def import_messages(self, prefix, messages):
+        base_messages = {}
+        for key, message in messages.items():
+            if isinstance(message, dict):
+                self.messages[str(prefix) + "." + str(key)] = message
+            else:
+                base_messages[key] = message
 
+        if len(base_messages):
+            self.messages[prefix] = base_messages
+
+
+class ComplexValidator(ComplexValidatorMixin, BaseValidator):
     """
     Base for validator which inject context
     """
@@ -69,33 +85,25 @@ class ComplexValidator(BaseValidator):
         context.pop()
         return result
 
-    def import_messages(self, prefix, messages):
-        base_messages = {}
-        for key, message in messages.items():
-            if isinstance(message, dict):
-                self.messages[str(prefix) + "." + str(key)] = message
-            else:
-                base_messages[key] = message
 
-        if len(base_messages):
-            self.messages[prefix] = base_messages
-
-
-class ListValidator(ComplexValidator):
-
-    """
-    Validate items on list
-    """
+class ListValidatorMixin(metaclass=ValidatorMetaclass):
 
     def __init__(self, validator, stop_on_fail=True, *args, **kwargs):
-        super(ListValidator, self).__init__(*args, **kwargs)
+        super(ListValidatorMixin, self).__init__(*args, **kwargs)
 
         self.validator = validator
         self.stop_on_fail = stop_on_fail
 
 
-class AllItems(ListValidator):
+class ListValidator(ListValidatorMixin, ComplexValidator):
+    """
+    Validate items on list
+    """
 
+    pass
+
+
+class AllItems(ListValidator):
     """
     Validate all items on list
     """
@@ -111,12 +119,7 @@ class AllItems(ListValidator):
         return result
 
 
-class SomeItems(ListValidator):
-
-    """
-    Validate some items on list
-    """
-
+class SomeItemsMixin(metaclass=ValidatorMetaclass):
     TOO_MANY_VALID_ITEMS = 'tooManyValidItems'
     TOO_FEW_VALID_ITEMS = 'tooFewValidItems'
 
@@ -126,13 +129,19 @@ class SomeItems(ListValidator):
     }
 
     def __init__(self, min=1, max=-1, *args, **kwargs):
-        super(SomeItems, self).__init__(*args, **kwargs)
+        super(SomeItemsMixin, self).__init__(*args, **kwargs)
         assert min != -1 or max != -1, 'At least one of `min` or `max` must be specified.'
         assert max == -1 or min <= max, '`min` cannot be more than `max`.'
         self.min = min
         self.max = max
 
         self.message_values.update({"min": self.min, "max": self.max})
+
+
+class SomeItems(SomeItemsMixin, ListValidator):
+    """
+    Validate some items on list
+    """
 
     def _internal_is_valid(self, value, *args, **kwargs):
         item_pass = 0
@@ -158,7 +167,6 @@ class SomeItems(ListValidator):
 
 
 class ItemLimitedOccurrences(BaseValidator):
-
     """
     Validate whether item in list are distincts
     """
@@ -256,12 +264,7 @@ def get_field_value_from_context(field_name, context_list):
         return None
 
 
-class IfField(BaseValidator):
-
-    """
-    Conditional validator. It runs validators if a specific field value pass validations.
-    """
-
+class IfFieldMixin(metaclass=ValidatorMetaclass):
     NEEDS_VALIDATE = 'needsValidate'
 
     error_messages = {
@@ -270,7 +273,7 @@ class IfField(BaseValidator):
 
     def __init__(self, validator, field_name, field_validator=None,
                  run_if_none=False, add_check_info=True, *args, **kwargs):
-        super(IfField, self).__init__(*args, **kwargs)
+        super(IfFieldMixin, self).__init__(*args, **kwargs)
 
         self.validator = validator
         self.field_name = field_name
@@ -279,6 +282,12 @@ class IfField(BaseValidator):
         self.add_check_info = add_check_info
 
         self.message_values['field_name'] = field_name
+
+
+class IfField(IfFieldMixin, BaseValidator):
+    """
+    Conditional validator. It runs validators if a specific field value pass validations.
+    """
 
     def _internal_is_valid(self, value, *args, **kwargs):
         field_value = get_field_value_from_context(self.field_name, kwargs.get('context', []))
@@ -294,12 +303,7 @@ class IfField(BaseValidator):
         return True
 
 
-class BaseSpec(ComplexValidator):
-
-    """
-    Base class to use spec
-    """
-
+class BaseSpecMixin(metaclass=ValidatorMetaclass):
     INVALID_KEY = 'invalidKey'
 
     error_messages = {
@@ -309,7 +313,7 @@ class BaseSpec(ComplexValidator):
     key_validator = None
 
     def __init__(self, spec=None, stop_on_fail=True, key_validator=None, *args, **kwargs):
-        super(BaseSpec, self).__init__(*args, **kwargs)
+        super(BaseSpecMixin, self).__init__(*args, **kwargs)
 
         if spec is not None:
             self.spec = spec.copy()
@@ -323,6 +327,12 @@ class BaseSpec(ComplexValidator):
 
         if key_validator:
             self.key_validator = key_validator
+
+
+class BaseSpec(BaseSpecMixin, ComplexValidator):
+    """
+    Base class to use spec
+    """
 
     def _internal_field_validate(self, validator, field_name, field_value, *args, **kwargs):
 
@@ -361,8 +371,7 @@ class BaseSpec(ComplexValidator):
         return result
 
 
-class DictValidate(BaseSpec):
-
+class DictValidateMixin(metaclass=ValidatorMetaclass):
     INVALID_TYPE = 'notDict'
 
     error_messages = {
@@ -375,6 +384,9 @@ class DictValidate(BaseSpec):
     def _get_keys(self, value):
         return value.keys()
 
+
+class DictValidate(DictValidateMixin, BaseSpec):
+
     def _internal_is_valid(self, value, *args, **kwargs):
         if not isinstance(value, dict):
             self.error(self.INVALID_TYPE, value)
@@ -383,8 +395,7 @@ class DictValidate(BaseSpec):
         return super(DictValidate, self)._internal_is_valid(value, *args, **kwargs)
 
 
-class Required(Chain):
-
+class RequiredMixin(metaclass=ValidatorMetaclass):
     REQUIRED = 'required'
 
     error_messages = {
@@ -393,8 +404,10 @@ class Required(Chain):
 
     def __init__(self, empty_validator=None, *args, **kwargs):
         self.empty_validator = empty_validator or NotNone()
-        super(Required, self).__init__(*args, **kwargs)
+        super(RequiredMixin, self).__init__(*args, **kwargs)
 
+
+class Required(RequiredMixin, Chain):
     def _internal_is_valid(self, value, *args, **kwargs):
         if not self.empty_validator.is_valid(value):
             self.error(self.REQUIRED, value)
@@ -403,11 +416,14 @@ class Required(Chain):
         return super(Required, self)._internal_is_valid(value, *args, **kwargs)
 
 
-class Optional(Chain):
+class OptionalMixin(metaclass=ValidatorMetaclass):
 
     def __init__(self, empty_validator=None, *args, **kwargs):
         self.empty_validator = empty_validator or NotNone()
-        super(Optional, self).__init__(*args, **kwargs)
+        super(OptionalMixin, self).__init__(*args, **kwargs)
+
+
+class Optional(OptionalMixin, Chain):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if not self.empty_validator.is_valid(value):
@@ -433,8 +449,7 @@ class ModelValidateMetaclass(ValidatorMetaclass):
         return result
 
 
-class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
-
+class ModelValidateMixin(metaclass=ModelValidateMetaclass):
     __modelclass__ = BaseModel
 
     INVALID_MODEL = 'notModel'
@@ -456,7 +471,7 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
 
         self.spec = OrderedDict((self._get_real_fieldname(fieldname), validator)
                                 for fieldname, validator in self.spec.items())
-        super(ModelValidate, self).__init__(*args, **kwargs)
+        super(ModelValidateMixin, self).__init__(*args, **kwargs)
 
     def get_field_value(self, field_name, value, kwargs):
         kwargs['is_modified'] = value.is_modified_field(field_name)
@@ -468,6 +483,9 @@ class ModelValidate(BaseSpec, metaclass=ModelValidateMetaclass):
 
     def _get_keys(self, value):
         return value.get_fields()
+
+
+class ModelValidate(ModelValidateMixin, BaseSpec):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         if not isinstance(value, self.__modelclass__):

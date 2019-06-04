@@ -25,10 +25,17 @@ Features
 - Specific error control messages.
 - Dirty model integration (https://github.com/alfred82santa/dirty-models)
 - No database dependent.
+- Asynchronous validators.
 
 *********
 Changelog
 *********
+
+-------------
+Version 0.5.0
+-------------
+
+- Added asynchronous validators.
 
 -------------
 Version 0.4.0
