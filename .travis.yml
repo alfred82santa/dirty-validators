@@ -13,4 +13,5 @@ script:
 after_success:
   - coveralls --rcfile=.coveragerc
 cache: pip
-sudo: false
+sudo: required
+dist: xenial
