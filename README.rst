@@ -1,10 +1,10 @@
 |travis-master| |coverall-master|
 
 .. |travis-master| image:: https://travis-ci.org/alfred82santa/dirty-validators.svg?branch=master
-:target: https://travis-ci.org/alfred82santa/dirty-validators
+   :target: https://travis-ci.org/alfred82santa/dirty-validators
 
 .. |coverall-master| image:: https://coveralls.io/repos/alfred82santa/dirty-validators/badge.png?branch=master
-:target: https://coveralls.io/r/alfred82santa/dirty-validators?branch=master
+   :target: https://coveralls.io/r/alfred82santa/dirty-validators?branch=master
 
 ================
 dirty-validators
