@@ -86,7 +86,18 @@ class ComplexValidator(ComplexValidatorMixin, BaseValidator):
         return result
 
 
-class ListValidatorMixin(metaclass=ValidatorMetaclass):
+class BaseValueIterableMixin:
+
+    def _iter_values(self, value):
+        if isinstance(value, (list, tuple)):
+            return enumerate(value)
+        elif isinstance(value, dict):
+            return value.items()
+        else:
+            return value
+
+
+class ListValidatorMixin(BaseValueIterableMixin, metaclass=ValidatorMetaclass):
 
     def __init__(self, validator, stop_on_fail=True, *args, **kwargs):
         super(ListValidatorMixin, self).__init__(*args, **kwargs)
@@ -99,7 +110,6 @@ class ListValidator(ListValidatorMixin, ComplexValidator):
     """
     Validate items on list
     """
-
     pass
 
 
@@ -110,9 +120,11 @@ class AllItems(ListValidator):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
-        for item_index in range(len(value)):
-            if not self.validator.is_valid(value[item_index], *args, **kwargs):
-                self.import_messages(item_index, self.validator.messages)
+
+        for idx, val in self._iter_values(value):
+
+            if not self.validator.is_valid(val, *args, **kwargs):
+                self.import_messages(idx, self.validator.messages)
                 result = False
                 if self.stop_on_fail:
                     return False
@@ -145,9 +157,9 @@ class SomeItems(SomeItemsMixin, ListValidator):
 
     def _internal_is_valid(self, value, *args, **kwargs):
         item_pass = 0
-        for item_index in range(len(value)):
-            if not self.validator.is_valid(value[item_index], *args, **kwargs):
-                self.import_messages(item_index, self.validator.messages)
+        for idx, val in self._iter_values(value):
+            if not self.validator.is_valid(val, *args, **kwargs):
+                self.import_messages(idx, self.validator.messages)
             else:
                 item_pass += 1
                 if self.stop_on_fail and self.max != -1 and item_pass > self.max:
@@ -166,7 +178,7 @@ class SomeItems(SomeItemsMixin, ListValidator):
         return True
 
 
-class ItemLimitedOccurrences(BaseValidator):
+class ItemLimitedOccurrences(BaseValueIterableMixin, BaseValidator):
     """
     Validate whether item in list are distincts
     """
@@ -203,8 +215,8 @@ class ItemLimitedOccurrences(BaseValidator):
 
         counter = {}
 
-        for item in value:
-            val = self._get_checking_value(item)
+        for _, val in self._iter_values(value):
+            val = self._get_checking_value(val)
             add_occurrence(val, counter)
 
             if counter[val] > self.max_occ:
@@ -311,8 +323,9 @@ class BaseSpecMixin(metaclass=ValidatorMetaclass):
     }
 
     key_validator = None
+    value_validators = None
 
-    def __init__(self, spec=None, stop_on_fail=True, key_validator=None, *args, **kwargs):
+    def __init__(self, spec=None, stop_on_fail=True, key_validator=None, value_validators=None, *args, **kwargs):
         super(BaseSpecMixin, self).__init__(*args, **kwargs)
 
         if spec is not None:
@@ -327,6 +340,9 @@ class BaseSpecMixin(metaclass=ValidatorMetaclass):
 
         if key_validator:
             self.key_validator = key_validator
+
+        if value_validators:
+            self.value_validators = value_validators
 
 
 class BaseSpec(BaseSpecMixin, ComplexValidator):
@@ -344,6 +360,9 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
     def _internal_validate_keys(self, keys, *args, **kwargs):
         result = True
         for k in keys:
+            if k in self.spec:
+                continue
+
             if self.key_validator.is_valid(k, *args, **kwargs):
                 continue
             self.error(self.INVALID_KEY, k)
@@ -352,6 +371,20 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
             if self.stop_on_fail:
                 return False
         return result
+
+    def _internal_validate_values(self, value, keys, *args, **kwargs):
+        temp = {}
+
+        for k in keys:
+            if k in self.spec:
+                continue
+
+            temp[k] = self.get_field_value(k, value, kwargs)
+
+        if not self.value_validators.is_valid(temp, *args, **kwargs):
+            self.messages.update(self.value_validators.messages)
+            return False
+        return True
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
@@ -364,6 +397,12 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
             field_value = self.get_field_value(field_name, value, kwargs)
 
             if not self._internal_field_validate(validator, field_name, field_value, *args, **kwargs):
+                result = False
+                if self.stop_on_fail:
+                    return False
+
+        if self.value_validators:
+            if not self._internal_validate_values(value, self._get_keys(value), *args, **kwargs):
                 result = False
                 if self.stop_on_fail:
                     return False

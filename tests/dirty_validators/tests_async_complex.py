@@ -6,7 +6,7 @@ from dirty_models.models import BaseModel, HashMapModel
 
 from dirty_validators.async_complex import AllItems, Chain, DictValidate, IfField, \
     ModelValidate, Optional, Required, Some, SomeItems
-from dirty_validators.basic import Email, Length, NotEmpty, NotNone, Regexp
+from dirty_validators.basic import Email, Length, NotEmpty, NotNone, NumberRange, Regexp
 
 
 class TestAsyncChainStopOnFail(TestCase):
@@ -613,6 +613,16 @@ class TestHashMapModelValidate(TestCase):
         validator = ModelValidate(key_validator=Regexp(regex='^field'))
         self.assertTrue(await validator.is_valid(model), validator.messages)
 
+    async def test_key_validate_ignore_def(self):
+        model = HashMapModel(data={'fakeName1': 1,
+                                   'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertTrue(await validator.is_valid(model), validator.messages)
+
     async def test_key_validate_fail(self):
         model = HashMapModel(data={'fakeName1': 1,
                                    'fieldName2': 2})
@@ -622,3 +632,30 @@ class TestHashMapModelValidate(TestCase):
         self.assertDictEqual(validator.messages,
                              {'fakeName1': {'notMatch': "'fakeName1' does not match against pattern '^field'"},
                               'invalidKey': "'fakeName1' is not a valid key"})
+
+    async def test_values_validate(self):
+        model = HashMapModel(data={'fieldName1': 1,
+                                   'fieldName2': 2})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(await validator.is_valid(model), validator.messages)
+
+    async def test_value_validate_ignore_def(self):
+        model = HashMapModel(data={'fakeName1': 12,
+                                   'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(await validator.is_valid(model), validator.messages)
+
+    async def test_values_validate_fail(self):
+        model = HashMapModel(data={'fakeName1': 1,
+                                   'fieldName2': 3})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertFalse(await validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fieldName2': {'outOfRange': "'3' is out of range (None, 2)"}},
+                             validator.messages)

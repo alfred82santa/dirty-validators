@@ -32,6 +32,12 @@ Changelog
 *********
 
 -------------
+Version 0.5.1
+-------------
+
+- Added value validators for mappings.
+
+-------------
 Version 0.5.0
 -------------
 
