@@ -1,13 +1,12 @@
+from collections import OrderedDict
 from unittest import TestCase
 
-from collections import OrderedDict
-from dirty_models.fields import StringField, ModelField, ArrayField
+from dirty_models.fields import ArrayField, ModelField, StringField
 from dirty_models.models import BaseModel, HashMapModel
 
-from dirty_validators.basic import Length, Regexp, Email, NotNone, NotEmpty
-from dirty_validators.complex import (Chain, Some, AllItems, SomeItems,
-                                      get_field_value_from_context, IfField,
-                                      DictValidate, Required, Optional, ModelValidate, ItemLimitedOccurrences)
+from dirty_validators.basic import Email, Length, NotEmpty, NotNone, NumberRange, Regexp
+from dirty_validators.complex import (AllItems, Chain, DictValidate, IfField, ItemLimitedOccurrences, ModelValidate,
+                                      Optional, Required, Some, SomeItems, get_field_value_from_context)
 
 
 class TestChainStopOnFail(TestCase):
@@ -121,6 +120,27 @@ class TestAllItemsStopOnFail(TestCase):
         self.assertFalse(self.validator.is_valid([['testaaa', 'assa'], ['auds', 'aass']]))
         self.assertDictEqual(self.validator.messages,
                              {"0.1": {Length.TOO_SHORT: "'assa' is less than 5 unit length"}})
+
+
+class TestAllItemsForModelsStopOnFail(TestCase):
+    def setUp(self):
+        self.validator = AllItems(validator=Length(min=14, max=16))
+
+    def tearDown(self):
+        pass
+
+    def test_validate_success(self):
+        self.assertTrue(self.validator.is_valid(HashMapModel(data={'field1': 'abcdefg@test.com',
+                                                                   'field2': '12345678901234',
+                                                                   'field3': 'abcdefghijklmno'})))
+        self.assertDictEqual(self.validator.messages, {})
+
+    def test_validate_first_fail(self):
+        self.assertFalse(self.validator.is_valid(HashMapModel(data={'field1': 'test',
+                                                                    'field2': '12345678901234',
+                                                                    'field3': 'abcdefghijklmno'})))
+        self.assertDictEqual(self.validator.messages,
+                             {'field1': {Length.TOO_SHORT: "'test' is less than 14 unit length"}})
 
 
 class TestAllItemsDontStopOnFail(TestCase):
@@ -620,14 +640,16 @@ class TestDictTreeValidate(TestCase):
                                             "fieldName3": Chain(validators=[NotNone(),
                                                                             Length(min=7, max=8)]),
                                             "fieldTree1": Chain(validators=[NotEmpty(), dicttree1])},
-                                      key_validator=Regexp(regex='^field'))
+                                      key_validator=Regexp(regex='^field'),
+                                      value_validators=SomeItems(validator=NumberRange(min=1)))
 
     def test_validate_only_required_success(self):
         data = {
             "fieldName3": "123456qw",
             "fieldTree1": {
                 "fieldName3": "123456qw"
-            }
+            },
+            'fieldNumber': 2
         }
         self.assertTrue(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
@@ -639,7 +661,8 @@ class TestDictTreeValidate(TestCase):
             "fieldTree1": {
                 "fieldName2": "12",
                 "fieldName3": "123456qw",
-            }
+            },
+            'fieldNumber': 2
         }
         self.assertTrue(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {})
@@ -650,7 +673,8 @@ class TestDictTreeValidate(TestCase):
             "fieldName3": "123456qw",
             "fieldTree1": {
                 "fieldName3": "123456qw",
-            }
+            },
+            'fieldNumber': 2
         }
         self.assertFalse(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages, {'fieldTree1.fieldName2': {'notNone': 'Value must not be None'}})
@@ -663,13 +687,26 @@ class TestDictTreeValidate(TestCase):
             "fieldTree1": {
                 "fieldName2": "12",
                 "fieldName3": "123456qw",
-            }
+            },
+            'fieldNumber': 2
         }
         self.assertFalse(self.validator.is_valid(data), self.validator.messages)
         self.assertDictEqual(self.validator.messages,
                              {'invalidKey': "'fakeField' is not a valid key",
                               'fakeField': {'notMatch': "'fakeField' does not match against pattern '^field'"}},
                              self.validator.messages)
+
+    def test_validate_extra_fields_fail(self):
+        data = {
+            "fieldName2": "12",
+            "fieldName3": "123456qw",
+            "fieldTree1": {
+                "fieldName2": "12",
+                "fieldName3": "123456qw",
+            }
+        }
+        self.assertFalse(self.validator.is_valid(data))
+        self.assertDictEqual(self.validator.messages, {'tooFewValidItems': 'Too few items pass validation'})
 
 
 class TestRequiredValidate(TestCase):
@@ -859,15 +896,23 @@ class TestModelValidate(TestCase):
 class TestHashMapModelValidate(TestCase):
 
     def test_key_validate(self):
-
         model = HashMapModel(data={'fieldName1': 1,
                                    'fieldName2': 2})
 
         validator = ModelValidate(key_validator=Regexp(regex='^field'))
         self.assertTrue(validator.is_valid(model), validator.messages)
 
-    def test_key_validate_fail(self):
+    def test_key_validate_ignore_def(self):
+        model = HashMapModel(data={'fakeName1': 1,
+                                   'fieldName2': 2})
 
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_key_validate_fail(self):
         model = HashMapModel(data={'fakeName1': 1,
                                    'fieldName2': 2})
 
@@ -876,3 +921,30 @@ class TestHashMapModelValidate(TestCase):
         self.assertDictEqual(validator.messages,
                              {'fakeName1': {'notMatch': "'fakeName1' does not match against pattern '^field'"},
                               'invalidKey': "'fakeName1' is not a valid key"})
+
+    def test_values_validate(self):
+        model = HashMapModel(data={'fieldName1': 1,
+                                   'fieldName2': 2})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_value_validate_ignore_def(self):
+        model = HashMapModel(data={'fakeName1': 12,
+                                   'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_values_validate_fail(self):
+        model = HashMapModel(data={'fakeName1': 1,
+                                   'fieldName2': 3})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fieldName2': {'outOfRange': "'3' is out of range (None, 2)"}},
+                             validator.messages)

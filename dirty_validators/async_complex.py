@@ -89,9 +89,9 @@ class AllItems(ListValidator):
 
     async def _internal_is_valid(self, value, *args, **kwargs):
         result = True
-        for item_index in range(len(value)):
-            if not (await is_valid_helper(self.validator, value[item_index], *args, **kwargs)):
-                self.import_messages(item_index, self.validator.messages)
+        for idx, val in self._iter_values(value):
+            if not (await is_valid_helper(self.validator, val, *args, **kwargs)):
+                self.import_messages(idx, self.validator.messages)
                 result = False
                 if self.stop_on_fail:
                     return False
@@ -105,9 +105,9 @@ class SomeItems(SomeItemsMixin, ListValidator):
 
     async def _internal_is_valid(self, value, *args, **kwargs):
         item_pass = 0
-        for item_index in range(len(value)):
-            if not (await is_valid_helper(self.validator, value[item_index], *args, **kwargs)):
-                self.import_messages(item_index, self.validator.messages)
+        for idx, val in self._iter_values(value):
+            if not (await is_valid_helper(self.validator, val, *args, **kwargs)):
+                self.import_messages(idx, self.validator.messages)
             else:
                 item_pass += 1
                 if self.stop_on_fail and self.max != -1 and item_pass > self.max:
@@ -161,6 +161,9 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
     async def _internal_validate_keys(self, keys, *args, **kwargs):
         result = True
         for k in keys:
+            if k in self.spec:
+                continue
+
             if (await is_valid_helper(self.key_validator, k, *args, **kwargs)):
                 continue
 
@@ -170,6 +173,20 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
             if self.stop_on_fail:
                 return False
         return result
+
+    async def _internal_validate_values(self, value, keys, *args, **kwargs):
+        temp = {}
+
+        for k in keys:
+            if k in self.spec:
+                continue
+
+            temp[k] = self.get_field_value(k, value, kwargs)
+
+        if not (await is_valid_helper(self.value_validators, temp, *args, **kwargs)):
+            self.messages.update(self.value_validators.messages)
+            return False
+        return True
 
     async def _internal_is_valid(self, value, *args, **kwargs):
         result = True
@@ -182,6 +199,12 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
             field_value = self.get_field_value(field_name, value, kwargs)
 
             if not (await self._internal_field_validate(validator, field_name, field_value, *args, **kwargs)):
+                result = False
+                if self.stop_on_fail:
+                    return False
+
+        if self.value_validators:
+            if not (await self._internal_validate_values(value, self._get_keys(value), *args, **kwargs)):
                 result = False
                 if self.stop_on_fail:
                     return False
