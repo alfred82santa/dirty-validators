@@ -5,9 +5,14 @@ Complex validators
 """
 from collections import OrderedDict
 
-from dirty_models.models import BaseModel, ListModel
-
 from .basic import BaseValidator, NotNone, ValidatorMetaclass
+
+try:
+    from dirty_models.model_types import ListModel
+
+    ListLike = (list, tuple, set, ListModel)
+except ImportError:  # pragma: no cover
+    ListLike = (list, tuple, set)
 
 
 class ChainMixin:
@@ -89,7 +94,7 @@ class ComplexValidator(ComplexValidatorMixin, BaseValidator):
 class BaseValueIterableMixin:
 
     def _iter_values(self, value):
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, ListLike):
             return enumerate(value)
         elif isinstance(value, dict):
             return value.items()
@@ -471,64 +476,68 @@ class Optional(OptionalMixin, Chain):
         return Chain._internal_is_valid(self, value, *args, **kwargs)
 
 
-class ModelValidateMetaclass(ValidatorMetaclass):
+try:
+    from dirty_models.models import BaseModel
+except ImportError:  # pragma: no cover
+    pass
+else:
 
-    @classmethod
-    def __prepare__(metacls, name, bases):  # No keywords in this case
-        return OrderedDict()
+    class ModelValidateMetaclass(ValidatorMetaclass):
 
-    def __new__(cls, name, bases, classdict):
-        result = super(ModelValidateMetaclass, cls).__new__(
-            cls, name, bases, classdict)
+        @classmethod
+        def __prepare__(metacls, name, bases):  # No keywords in this case
+            return OrderedDict()
 
-        spec = OrderedDict([(field, validator) for field, validator in classdict.items()
-                            if hasattr(validator, 'is_valid')])
+        def __new__(cls, name, bases, classdict):
+            result = super(ModelValidateMetaclass, cls).__new__(
+                cls, name, bases, classdict)
 
-        setattr(result, 'spec', spec)
-        return result
+            spec = OrderedDict([(field, validator) for field, validator in classdict.items()
+                                if hasattr(validator, 'is_valid')])
 
+            setattr(result, 'spec', spec)
+            return result
 
-class ModelValidateMixin(metaclass=ModelValidateMetaclass):
-    __modelclass__ = BaseModel
+    class ModelValidateMixin(metaclass=ModelValidateMetaclass):
+        __modelclass__ = BaseModel
 
-    INVALID_MODEL = 'notModel'
+        INVALID_MODEL = 'notModel'
 
-    error_messages = {
-        INVALID_MODEL: "'$value' is not an instance of $model",
-    }
+        error_messages = {
+            INVALID_MODEL: "'$value' is not an instance of $model",
+        }
 
-    def _get_real_fieldname(self, fieldname):
-        try:
-            return self.__modelclass__.get_field_obj(fieldname).name
-        except AttributeError:
-            return fieldname
+        def _get_real_fieldname(self, fieldname):
+            try:
+                return self.__modelclass__.get_field_obj(fieldname).name
+            except AttributeError:
+                return fieldname
 
-    def __init__(self, spec=None, *args, **kwargs):
-        self.spec = self.spec.copy()
-        if spec is not None:
-            self.spec.update(spec)
+        def __init__(self, spec=None, *args, **kwargs):
+            self.spec = self.spec.copy()
+            if spec is not None:
+                self.spec.update(spec)
 
-        self.spec = OrderedDict((self._get_real_fieldname(fieldname), validator)
-                                for fieldname, validator in self.spec.items())
-        super(ModelValidateMixin, self).__init__(*args, **kwargs)
+            self.spec = OrderedDict((self._get_real_fieldname(fieldname), validator)
+                                    for fieldname, validator in self.spec.items())
+            super(ModelValidateMixin, self).__init__(*args, **kwargs)
 
-    def get_field_value(self, field_name, value, kwargs):
-        kwargs['is_modified'] = value.is_modified_field(field_name)
+        def get_field_value(self, field_name, value, kwargs):
+            kwargs['is_modified'] = value.is_modified_field(field_name)
 
-        try:
-            return getattr(value, field_name)
-        except AttributeError:
-            return None
+            try:
+                return getattr(value, field_name)
+            except AttributeError:
+                return None
 
-    def _get_keys(self, value):
-        return value.get_fields()
+        def _get_keys(self, value):
+            return value.get_fields()
 
+    class ModelValidate(ModelValidateMixin, BaseSpec):
 
-class ModelValidate(ModelValidateMixin, BaseSpec):
+        def _internal_is_valid(self, value, *args, **kwargs):
+            if not isinstance(value, self.__modelclass__):
+                self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
+                return False
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        if not isinstance(value, self.__modelclass__):
-            self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
-            return False
-
-        return super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
+            return super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
