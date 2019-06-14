@@ -31,6 +31,14 @@ Features
 Changelog
 *********
 
+
+-------------
+Version 0.5.2
+-------------
+
+- Remove hard dependency from Dirty Models.
+- Fix bug iterating ListModels.
+
 -------------
 Version 0.5.1
 -------------

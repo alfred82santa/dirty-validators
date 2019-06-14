@@ -6,7 +6,7 @@ Async complex validators
 
 from .basic import BaseValidator
 from .complex import BaseSpecMixin, ChainMixin, ComplexValidatorMixin, DictValidateMixin, \
-    IfFieldMixin, ListValidatorMixin, ModelValidateMixin, OptionalMixin, RequiredMixin, SomeItemsMixin, SomeMixin, \
+    IfFieldMixin, ListValidatorMixin, OptionalMixin, RequiredMixin, SomeItemsMixin, SomeMixin, \
     get_field_value_from_context
 
 
@@ -241,11 +241,16 @@ class Optional(OptionalMixin, Chain):
         return await super(Optional, self)._internal_is_valid(value, *args, **kwargs)
 
 
-class ModelValidate(ModelValidateMixin, BaseSpec):
+try:
+    from .complex import ModelValidateMixin
+except ImportError:  # pragma: no cover
+    pass
+else:
+    class ModelValidate(ModelValidateMixin, BaseSpec):
 
-    async def _internal_is_valid(self, value, *args, **kwargs):
-        if not isinstance(value, self.__modelclass__):
-            self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
-            return False
+        async def _internal_is_valid(self, value, *args, **kwargs):
+            if not isinstance(value, self.__modelclass__):
+                self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
+                return False
 
-        return await super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
+            return await super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
