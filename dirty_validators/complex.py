@@ -327,8 +327,8 @@ class BaseSpecMixin(metaclass=ValidatorMetaclass):
         INVALID_KEY: "'$value' is not a valid key",
     }
 
-    key_validator = None
-    value_validators = None
+    __key_validator__ = None
+    __value_validators__ = None
 
     def __init__(self, spec=None, stop_on_fail=True, key_validator=None, value_validators=None, *args, **kwargs):
         super(BaseSpecMixin, self).__init__(*args, **kwargs)
@@ -344,10 +344,10 @@ class BaseSpecMixin(metaclass=ValidatorMetaclass):
         self.stop_on_fail = stop_on_fail
 
         if key_validator:
-            self.key_validator = key_validator
+            self.__key_validator__ = key_validator
 
         if value_validators:
-            self.value_validators = value_validators
+            self.__value_validators__ = value_validators
 
 
 class BaseSpec(BaseSpecMixin, ComplexValidator):
@@ -368,10 +368,10 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
             if k in self.spec:
                 continue
 
-            if self.key_validator.is_valid(k, *args, **kwargs):
+            if self.__key_validator__.is_valid(k, *args, **kwargs):
                 continue
             self.error(self.INVALID_KEY, k)
-            self.import_messages(k, self.key_validator.messages)
+            self.import_messages(k, self.__key_validator__.messages)
             result = False
             if self.stop_on_fail:
                 return False
@@ -386,14 +386,14 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
 
             temp[k] = self.get_field_value(k, value, kwargs)
 
-        if not self.value_validators.is_valid(temp, *args, **kwargs):
-            self.messages.update(self.value_validators.messages)
+        if not self.__value_validators__.is_valid(temp, *args, **kwargs):
+            self.messages.update(self.__value_validators__.messages)
             return False
         return True
 
     def _internal_is_valid(self, value, *args, **kwargs):
         result = True
-        if self.key_validator and not self._internal_validate_keys(self._get_keys(value), *args, **kwargs):
+        if self.__key_validator__ and not self._internal_validate_keys(self._get_keys(value), *args, **kwargs):
             result = False
             if self.stop_on_fail:
                 return False
@@ -406,7 +406,7 @@ class BaseSpec(BaseSpecMixin, ComplexValidator):
                 if self.stop_on_fail:
                     return False
 
-        if self.value_validators:
+        if self.__value_validators__:
             if not self._internal_validate_values(value, self._get_keys(value), *args, **kwargs):
                 result = False
                 if self.stop_on_fail:
@@ -477,7 +477,7 @@ class Optional(OptionalMixin, Chain):
 
 
 try:
-    from dirty_models.models import BaseModel
+    from dirty_models.models import BaseModel, HashMapModel, BaseDynamicModel
 except ImportError:  # pragma: no cover
     pass
 else:
@@ -493,7 +493,7 @@ else:
                 cls, name, bases, classdict)
 
             spec = OrderedDict([(field, validator) for field, validator in classdict.items()
-                                if hasattr(validator, 'is_valid')])
+                                if hasattr(validator, 'is_valid') and not field.startswith('_')])
 
             setattr(result, 'spec', spec)
             return result
@@ -509,6 +509,8 @@ else:
 
         def _get_real_fieldname(self, fieldname):
             try:
+                if issubclass(self.__modelclass__, (HashMapModel, BaseDynamicModel)):
+                    return self.__modelclass__().get_field_obj(fieldname).name
                 return self.__modelclass__.get_field_obj(fieldname).name
             except AttributeError:
                 return fieldname
