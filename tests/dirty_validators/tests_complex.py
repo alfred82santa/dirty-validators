@@ -1,8 +1,9 @@
 from collections import OrderedDict
 from unittest import TestCase
 
+from dirty_models import IntegerField
 from dirty_models.fields import ArrayField, ModelField, StringField
-from dirty_models.models import BaseModel, HashMapModel
+from dirty_models.models import BaseModel, FastDynamicModel, HashMapModel
 
 from dirty_validators.basic import Email, Length, NotEmpty, NotNone, NumberRange, Regexp
 from dirty_validators.complex import (AllItems, Chain, DictValidate, IfField, ItemLimitedOccurrences, ModelValidate,
@@ -947,4 +948,202 @@ class TestHashMapModelValidate(TestCase):
         self.assertFalse(validator.is_valid(model), validator.messages)
         self.assertDictEqual(validator.messages,
                              {'fieldName2': {'outOfRange': "'3' is out of range (None, 2)"}},
+                             validator.messages)
+
+    def test_hard_field_fail(self):
+        model = HashMapModel(data={'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fakeName1': {'required': 'Value is required and can not be empty'}},
+                             validator.messages)
+
+    def test_specific_model_ok(self):
+        class Model(HashMapModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fieldName2': 2, 'hard_field': 1})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_specific_model_hard_field_fail(self):
+        class Model(HashMapModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'hardField': {'required': 'Value is required and can not be empty'}},
+                             validator.messages)
+
+    def test_specific_model_key_fail(self):
+        class Model(HashMapModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fakeName': 2})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'invalidKey': "'fakeName' is not a valid key",
+                              'fakeName': {'notMatch': "'fakeName' does not match against pattern '^field'"}},
+                             validator.messages)
+
+    def test_specific_model_key_fail_2(self):
+        class Model(HashMapModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fakeName': 2})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+            __key_validator__ = Regexp(regex='^field')
+
+            hard_field = Required()
+
+        validator = Validator()
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'invalidKey': "'fakeName' is not a valid key",
+                              'fakeName': {'notMatch': "'fakeName' does not match against pattern '^field'"}},
+                             validator.messages)
+
+
+class TestFastDynamicModelValidate(TestCase):
+
+    def test_key_validate(self):
+        model = FastDynamicModel(data={'fieldName1': 1,
+                                       'fieldName2': 2})
+
+        validator = ModelValidate(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_key_validate_ignore_def(self):
+        model = FastDynamicModel(data={'fakeName1': 1,
+                                       'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_key_validate_fail(self):
+        model = FastDynamicModel(data={'fakeName1': 1,
+                                       'fieldName2': 2})
+
+        validator = ModelValidate(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fakeName1': {'notMatch': "'fakeName1' does not match against pattern '^field'"},
+                              'invalidKey': "'fakeName1' is not a valid key"})
+
+    def test_values_validate(self):
+        model = FastDynamicModel(data={'fieldName1': 1,
+                                       'fieldName2': 2})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_value_validate_ignore_def(self):
+        model = FastDynamicModel(data={'fakeName1': 12,
+                                       'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_values_validate_fail(self):
+        model = FastDynamicModel(data={'fakeName1': 1,
+                                       'fieldName2': 3})
+
+        validator = ModelValidate(value_validators=AllItems(validator=NumberRange(max=2)))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fieldName2': {'outOfRange': "'3' is out of range (None, 2)"}},
+                             validator.messages)
+
+    def test_hard_field_fail(self):
+        model = FastDynamicModel(data={'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            fakeName1 = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'fakeName1': {'required': 'Value is required and can not be empty'}},
+                             validator.messages)
+
+    def test_specific_model_ok(self):
+        class Model(FastDynamicModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fieldName2': 2, 'hard_field': 1})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_specific_model_hard_field_fail(self):
+        class Model(FastDynamicModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fieldName2': 2})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'hardField': {'required': 'Value is required and can not be empty'}},
+                             validator.messages)
+
+    def test_specific_model_key_fail(self):
+        class Model(FastDynamicModel):
+            hard_field = IntegerField(name='hardField')
+
+        model = Model(data={'fakeName': 2})
+
+        class Validator(ModelValidate):
+            __modelclass__ = Model
+
+            hard_field = Required()
+
+        validator = Validator(key_validator=Regexp(regex='^field'))
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'invalidKey': "'fakeName' is not a valid key",
+                              'fakeName': {'notMatch': "'fakeName' does not match against pattern '^field'"}},
                              validator.messages)
