@@ -492,8 +492,12 @@ else:
             result = super(ModelValidateMetaclass, cls).__new__(
                 cls, name, bases, classdict)
 
-            spec = OrderedDict([(field, validator) for field, validator in classdict.items()
-                                if hasattr(validator, 'is_valid') and not field.startswith('_')])
+            spec = getattr(result, 'spec', OrderedDict()).copy()
+
+            new_spec = OrderedDict([(field, validator) for field, validator in classdict.items()
+                                    if hasattr(validator, 'is_valid') and not field.startswith('_')])
+
+            spec.update(new_spec)
 
             setattr(result, 'spec', spec)
             return result
