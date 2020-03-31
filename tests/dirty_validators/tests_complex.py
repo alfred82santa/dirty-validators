@@ -1147,3 +1147,42 @@ class TestFastDynamicModelValidate(TestCase):
                              {'invalidKey': "'fakeName' is not a valid key",
                               'fakeName': {'notMatch': "'fakeName' does not match against pattern '^field'"}},
                              validator.messages)
+
+    def test_model_validator_inheritance_ok(self):
+        class Model(BaseModel):
+            hard_field = IntegerField()
+            soft_field = IntegerField()
+
+        model = Model(data={'hard_field': 2, 'soft_field': 2})
+
+        class BaseValidator(ModelValidate):
+            __modelclass__ = Model
+
+            soft_field = Required()
+
+        class Validator(BaseValidator):
+            hard_field = Required()
+
+        validator = Validator()
+        self.assertTrue(validator.is_valid(model), validator.messages)
+
+    def test_model_validator_inheritance_fail(self):
+        class Model(BaseModel):
+            hard_field = IntegerField()
+            soft_field = IntegerField()
+
+        model = Model(data={'hard_field': 2})
+
+        class BaseValidator(ModelValidate):
+            __modelclass__ = Model
+
+            soft_field = Required()
+
+        class Validator(BaseValidator):
+            hard_field = Required()
+
+        validator = Validator()
+        self.assertFalse(validator.is_valid(model), validator.messages)
+        self.assertDictEqual(validator.messages,
+                             {'soft_field': {'required': 'Value is required and can not be empty'}},
+                             validator.messages)

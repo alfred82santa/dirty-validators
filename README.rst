@@ -31,6 +31,11 @@ Features
 Changelog
 *********
 
+-------------
+Version 0.5.4
+-------------
+
+- Allow model validator inheritance.
 
 -------------
 Version 0.5.2
