@@ -3,9 +3,12 @@ Validators library
 
 Complex validators
 """
+from abc import abstractmethod
 from collections import OrderedDict
+from typing import Any, Callable, Iterable
 
 from .basic import BaseValidator, NotNone, ValidatorMetaclass
+from .ctx import Context
 
 try:
     from dirty_models.model_types import ListModel
@@ -13,6 +16,31 @@ try:
     ListLike = (list, tuple, set, ListModel)
 except ImportError:  # pragma: no cover
     ListLike = (list, tuple, set)
+
+
+class DeferredMixin:
+    def __init__(self,
+                 validator: Callable[['Context'], 'BaseValidator'] = None,
+                 *args, **kwargs):
+        assert validator is not None, 'Validator builder function is required'
+
+        super(DeferredMixin, self).__init__(*args, **kwargs)
+
+        self.validator = validator
+
+    def build_validator(self, ctx: 'Context') -> BaseValidator:
+        return self.validator(ctx)
+
+
+class Deferred(DeferredMixin, BaseValidator):
+    """
+    Use a deferred validator to build a validator on runtime.
+    """
+
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        child_ctx = self.build_validator(ctx).is_valid(value, *args, parent_ctx=ctx, **kwargs)
+        ctx.import_errors(child_ctx)
+        return ctx
 
 
 class ChainMixin:
@@ -28,15 +56,13 @@ class Chain(ChainMixin, BaseValidator):
     Use a chain of validators for one value
     """
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        result = True
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         for validator in self.validators:
-            if not validator.is_valid(value, *args, **kwargs):
-                self.messages.update(validator.messages)
-                result = False
-                if self.stop_on_fail:
-                    return False
-        return result
+            child_ctx = validator.is_valid(value, *args, parent_ctx=ctx, **kwargs)
+            ctx.import_errors(child_ctx)
+            if not child_ctx and self.stop_on_fail:
+                break
+        return ctx
 
 
 class SomeMixin(metaclass=ValidatorMetaclass):
@@ -51,44 +77,33 @@ class Some(SomeMixin, BaseValidator):
     Pass some validators for one value
     """
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        messages = {}
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        child_ctxs = []
         for validator in self.validators:
-            if validator.is_valid(value, *args, **kwargs):
-                return True
-            messages.update(validator.messages)
+            child_ctx = validator.is_valid(value, *args, parent_ctx=ctx, **kwargs)
+            if child_ctx:
+                return ctx
+            child_ctxs.append(child_ctx)
 
-        self.messages.update(messages)
-        return False
+        [ctx.import_errors(c) for c in child_ctxs]
+        return ctx
 
 
 class ComplexValidatorMixin(metaclass=ValidatorMetaclass):
-    def import_messages(self, prefix, messages):
-        base_messages = {}
-        for key, message in messages.items():
-            if isinstance(message, dict):
-                self.messages[str(prefix) + "." + str(key)] = message
-            else:
-                base_messages[key] = message
-
-        if len(base_messages):
-            self.messages[prefix] = base_messages
+    def _build_context(self: BaseValidator, value, *args, parent_ctx: 'Context' = None, **kwargs):
+        return Context(value=value,
+                       parent=parent_ctx,
+                       hidden_value=self.hidden_value,
+                       hide_value=self.hide_value,
+                       is_step=True,
+                       **self.message_values)
 
 
 class ComplexValidator(ComplexValidatorMixin, BaseValidator):
     """
-    Base for validator which inject context
+    Base for validator which inject step context
     """
-
-    def is_valid(self, value, *args, **kwargs):
-        context = kwargs.get('context', [])
-        context.append(value)
-        kwargs['context'] = context
-
-        result = super(ComplexValidator, self).is_valid(value, *args, **kwargs)
-
-        context.pop()
-        return result
+    pass
 
 
 class BaseValueIterableMixin:
@@ -123,17 +138,15 @@ class AllItems(ListValidator):
     Validate all items on list
     """
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        result = True
-
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         for idx, val in self._iter_values(value):
-
-            if not self.validator.is_valid(val, *args, **kwargs):
-                self.import_messages(idx, self.validator.messages)
-                result = False
+            child_ctx = self.validator.is_valid(val, *args, parent_ctx=ctx, **kwargs)
+            if not child_ctx:
+                ctx.import_errors(child_ctx, field_path=str(idx))
                 if self.stop_on_fail:
-                    return False
-        return result
+                    break
+
+        return ctx
 
 
 class SomeItemsMixin(metaclass=ValidatorMetaclass):
@@ -146,9 +159,10 @@ class SomeItemsMixin(metaclass=ValidatorMetaclass):
     }
 
     def __init__(self, min=1, max=-1, *args, **kwargs):
-        super(SomeItemsMixin, self).__init__(*args, **kwargs)
         assert min != -1 or max != -1, 'At least one of `min` or `max` must be specified.'
         assert max == -1 or min <= max, '`min` cannot be more than `max`.'
+
+        super(SomeItemsMixin, self).__init__(*args, **kwargs)
         self.min = min
         self.max = max
 
@@ -160,27 +174,31 @@ class SomeItems(SomeItemsMixin, ListValidator):
     Validate some items on list
     """
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        tmp_ctx = Context(parent=ctx)
         item_pass = 0
+        already_too_many = False
         for idx, val in self._iter_values(value):
-            if not self.validator.is_valid(val, *args, **kwargs):
-                self.import_messages(idx, self.validator.messages)
+            child_ctx = self.validator.is_valid(val, *args, parent_ctx=tmp_ctx, **kwargs)
+            if not child_ctx:
+                tmp_ctx.import_errors(child_ctx, field_path=str(idx))
             else:
                 item_pass += 1
-                if self.stop_on_fail and self.max != -1 and item_pass > self.max:
-                    self.error(self.TOO_MANY_VALID_ITEMS, value)
-                    return False
 
-        if self.max != -1 and item_pass > self.max:
-            self.error(self.TOO_MANY_VALID_ITEMS, value)
-            return False
+            if not already_too_many and self.max != -1 and item_pass > self.max:
+                self.error(self.TOO_MANY_VALID_ITEMS, value, ctx=ctx)
+                already_too_many = True
+
+                if self.stop_on_fail:
+                    break
 
         if self.min != -1 and item_pass < self.min:
-            self.error(self.TOO_FEW_VALID_ITEMS, value)
-            return False
+            self.error(self.TOO_FEW_VALID_ITEMS, value, ctx=ctx)
 
-        self.messages = {}
-        return True
+        if not ctx:
+            ctx.import_errors(tmp_ctx)
+
+        return ctx
 
 
 class ItemLimitedOccurrences(BaseValueIterableMixin, BaseValidator):
@@ -204,13 +222,13 @@ class ItemLimitedOccurrences(BaseValueIterableMixin, BaseValidator):
         self.message_values['min_occ'] = self.min_occ
         self.message_values['max_occ'] = self.max_occ
 
-    def _get_checking_value(self, value):
+    def _get_checking_value(self, value, *, ctx: 'Context'):
         """
         It must be override on descendant validators
         """
         return value
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
 
         def add_occurrence(val, counter):
             if val not in counter:
@@ -221,64 +239,23 @@ class ItemLimitedOccurrences(BaseValueIterableMixin, BaseValidator):
         counter = {}
 
         for _, val in self._iter_values(value):
-            val = self._get_checking_value(val)
+            val = self._get_checking_value(val, ctx=ctx)
             add_occurrence(val, counter)
 
             if counter[val] > self.max_occ:
-                self.error(self.TOO_MANY_ITEM_OCCURRENCES, val)
-                return False
+                child_ctx = ctx.build_child(value=val)
+                self.error(self.TOO_MANY_ITEM_OCCURRENCES, val, ctx=child_ctx)
+                ctx.import_errors(child_ctx)
+                return ctx
 
         for val, occ in counter.items():
             if occ < self.min_occ:
-                self.error(self.TOO_FEW_ITEM_OCCURRENCES, val)
-                return False
+                child_ctx = ctx.build_child(value=val)
+                self.error(self.TOO_FEW_ITEM_OCCURRENCES, val, ctx=child_ctx)
+                ctx.import_errors(child_ctx)
+                return ctx
 
-        return True
-
-
-def get_field_value_from_context(field_name, context_list):
-    """
-    Helper to get field value from string path.
-    String '<context>' is used to go up on context stack. It just
-    can be used at the beginning of path: <context>.<context>.field_name_1
-    On the other hand, '<root>' is used to start lookup from first item on context.
-    """
-    field_path = field_name.split('.')
-
-    if field_path[0] == '<root>':
-        context_index = 0
-        field_path.pop(0)
-    else:
-        context_index = -1
-        while field_path[0] == '<context>':
-            context_index -= 1
-            field_path.pop(0)
-
-    try:
-        field_value = context_list[context_index]
-
-        while len(field_path):
-            field = field_path.pop(0)
-            if isinstance(field_value, (list, tuple, ListModel)):
-                if field.isdigit():
-                    field = int(field)
-                field_value = field_value[field]
-            elif isinstance(field_value, dict):
-                try:
-                    field_value = field_value[field]
-                except KeyError:
-                    if field.isdigit():
-                        field = int(field)
-                        field_value = field_value[field]
-                    else:
-                        field_value = None
-
-            else:
-                field_value = getattr(field_value, field)
-
-        return field_value
-    except (IndexError, AttributeError, KeyError, TypeError):
-        return None
+        return ctx
 
 
 class IfFieldMixin(metaclass=ValidatorMetaclass):
@@ -306,18 +283,26 @@ class IfField(IfFieldMixin, BaseValidator):
     Conditional validator. It runs validators if a specific field value pass validations.
     """
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        field_value = get_field_value_from_context(self.field_name, kwargs.get('context', []))
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        field_value = ctx.get_field_value(self.field_name)
 
-        if (self.run_if_none or field_value is not None) and \
-                (self.field_validator is None or self.field_validator.is_valid(field_value, *args, **kwargs)) and \
-                not self.validator.is_valid(value, *args, **kwargs):
-            self.messages.update(self.validator.messages)
+        if not self.run_if_none and field_value is None:
+            return ctx
+
+        if self.field_validator is not None:
+            field_valid_ctx = self.field_validator.is_valid(field_value, *args, parent_ctx=ctx, **kwargs)
+
+            if not field_valid_ctx:
+                return ctx
+
+        child_ctx = self.validator.is_valid(value, *args, parent_ctx=ctx, **kwargs)
+
+        if not child_ctx:
+            ctx.import_errors(child_ctx)
             if self.add_check_info:
-                self.error(self.NEEDS_VALIDATE, value, field_value=field_value)
-            return False
+                self.error(self.NEEDS_VALIDATE, value, field_value=field_value, ctx=ctx)
 
-        return True
+        return ctx
 
 
 class BaseSpecMixin(metaclass=ValidatorMetaclass):
@@ -349,70 +334,77 @@ class BaseSpecMixin(metaclass=ValidatorMetaclass):
         if value_validators:
             self.__value_validators__ = value_validators
 
+    @abstractmethod
+    def get_field_value(self, field_name, value, ctx: 'Context', kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _get_keys(self, value, ctx: 'Context', **kwargs):
+        raise NotImplementedError()
+
 
 class BaseSpec(BaseSpecMixin, ComplexValidator):
     """
     Base class to use spec
     """
 
-    def _internal_field_validate(self, validator, field_name, field_value, *args, **kwargs):
+    def _internal_field_validate(self, validator, field_name, field_value, *args, ctx: 'Context', **kwargs):
+        child_ctx = validator.is_valid(field_value, *args, parent_ctx=ctx, **kwargs)
+        ctx.import_errors(child_ctx, field_name)
 
-        if not validator.is_valid(field_value, *args, **kwargs):
-            self.import_messages(field_name, validator.messages)
-            return False
-        return True
+        return ctx
 
-    def _internal_validate_keys(self, keys, *args, **kwargs):
-        result = True
+    def _internal_validate_keys(self, keys, *args, ctx: 'Context', **kwargs):
         for k in keys:
             if k in self.spec:
                 continue
 
-            if self.__key_validator__.is_valid(k, *args, **kwargs):
+            key_ctx = self.__key_validator__.is_valid(k, *args, parent_ctx=ctx, **kwargs)
+            if key_ctx:
                 continue
-            self.error(self.INVALID_KEY, k)
-            self.import_messages(k, self.__key_validator__.messages)
-            result = False
+            child_ctx = ctx.build_child(value=k)
+            self.error(self.INVALID_KEY, k, ctx=child_ctx)
+            ctx.import_errors(child_ctx)
+            ctx.import_errors(key_ctx, field_path=k)
             if self.stop_on_fail:
-                return False
-        return result
+                break
+        return ctx
 
-    def _internal_validate_values(self, value, keys, *args, **kwargs):
+    def _internal_validate_values(self, value, keys, *args, ctx: 'Context', **kwargs):
         temp = {}
 
         for k in keys:
             if k in self.spec:
                 continue
 
-            temp[k] = self.get_field_value(k, value, kwargs)
+            temp[k] = self.get_field_value(k, value, ctx=ctx, kwargs=kwargs)
 
-        if not self.__value_validators__.is_valid(temp, *args, **kwargs):
-            self.messages.update(self.__value_validators__.messages)
-            return False
-        return True
+        child_ctx = self.__value_validators__.is_valid(temp, *args, parent_ctx=ctx, **kwargs)
+        ctx.import_errors(child_ctx)
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        result = True
-        if self.__key_validator__ and not self._internal_validate_keys(self._get_keys(value), *args, **kwargs):
-            result = False
+        return ctx
+
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        if self.__key_validator__ and not self._internal_validate_keys(self._get_keys(value, ctx=ctx),
+                                                                       *args,
+                                                                       ctx=ctx,
+                                                                       **kwargs):
             if self.stop_on_fail:
-                return False
+                return ctx
 
         for field_name, validator in self.spec.items():
-            field_value = self.get_field_value(field_name, value, kwargs)
+            field_value = self.get_field_value(field_name, value, ctx=ctx, kwargs=kwargs)
 
-            if not self._internal_field_validate(validator, field_name, field_value, *args, **kwargs):
-                result = False
+            if not self._internal_field_validate(validator, field_name, field_value, *args, ctx=ctx, **kwargs):
                 if self.stop_on_fail:
-                    return False
+                    return ctx
 
         if self.__value_validators__:
-            if not self._internal_validate_values(value, self._get_keys(value), *args, **kwargs):
-                result = False
+            if not self._internal_validate_values(value, self._get_keys(value, ctx=ctx), *args, ctx=ctx, **kwargs):
                 if self.stop_on_fail:
-                    return False
+                    return ctx
 
-        return result
+        return ctx
 
 
 class DictValidateMixin(metaclass=ValidatorMetaclass):
@@ -422,21 +414,21 @@ class DictValidateMixin(metaclass=ValidatorMetaclass):
         INVALID_TYPE: "'$value' is not a dictionary",
     }
 
-    def get_field_value(self, field_name, value, kwargs):
+    def get_field_value(self, field_name, value, ctx: 'Context', kwargs) -> Any:
         return value.get(field_name, None)
 
-    def _get_keys(self, value):
+    def _get_keys(self, value, ctx: 'Context', **kwargs) -> Iterable[Any]:
         return value.keys()
 
 
 class DictValidate(DictValidateMixin, BaseSpec):
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if not isinstance(value, dict):
-            self.error(self.INVALID_TYPE, value)
-            return False
+            self.error(self.INVALID_TYPE, value, ctx=ctx)
+            return ctx
 
-        return super(DictValidate, self)._internal_is_valid(value, *args, **kwargs)
+        return super(DictValidate, self)._internal_is_valid(value, *args, ctx=ctx, **kwargs)
 
 
 class RequiredMixin(metaclass=ValidatorMetaclass):
@@ -452,12 +444,12 @@ class RequiredMixin(metaclass=ValidatorMetaclass):
 
 
 class Required(RequiredMixin, Chain):
-    def _internal_is_valid(self, value, *args, **kwargs):
-        if not self.empty_validator.is_valid(value):
-            self.error(self.REQUIRED, value)
-            return False
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        if not self.empty_validator.is_valid(value, parent_ctx=ctx):
+            self.error(self.REQUIRED, value, ctx=ctx)
+            return ctx
 
-        return super(Required, self)._internal_is_valid(value, *args, **kwargs)
+        return Chain._internal_is_valid(self, value, *args, ctx=ctx, **kwargs)
 
 
 class OptionalMixin(metaclass=ValidatorMetaclass):
@@ -469,15 +461,15 @@ class OptionalMixin(metaclass=ValidatorMetaclass):
 
 class Optional(OptionalMixin, Chain):
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        if not self.empty_validator.is_valid(value):
-            return True
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        if not self.empty_validator.is_valid(value, parent_ctx=ctx):
+            return ctx
 
-        return Chain._internal_is_valid(self, value, *args, **kwargs)
+        return Chain._internal_is_valid(self, value, *args, ctx=ctx, **kwargs)
 
 
 try:
-    from dirty_models.models import BaseModel, HashMapModel, BaseDynamicModel
+    from dirty_models.models import BaseDynamicModel, BaseModel, HashMapModel
 except ImportError:  # pragma: no cover
     pass
 else:
@@ -528,7 +520,7 @@ else:
                                     for fieldname, validator in self.spec.items())
             super(ModelValidateMixin, self).__init__(*args, **kwargs)
 
-        def get_field_value(self, field_name, value, kwargs):
+        def get_field_value(self, field_name, value, ctx: 'Context', kwargs):
             kwargs['is_modified'] = value.is_modified_field(field_name)
 
             try:
@@ -536,14 +528,14 @@ else:
             except AttributeError:
                 return None
 
-        def _get_keys(self, value):
+        def _get_keys(self, value, ctx: 'Context', **kwargs):
             return value.get_fields()
 
     class ModelValidate(ModelValidateMixin, BaseSpec):
 
-        def _internal_is_valid(self, value, *args, **kwargs):
+        def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
             if not isinstance(value, self.__modelclass__):
-                self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__)
-                return False
+                self.error(self.INVALID_MODEL, value, model=self.__modelclass__.__name__, ctx=ctx)
+                return ctx
 
-            return super(ModelValidate, self)._internal_is_valid(value, *args, **kwargs)
+            return super(ModelValidate, self)._internal_is_valid(value, *args, ctx=ctx, **kwargs)

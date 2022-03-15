@@ -15,6 +15,10 @@ Agnostic validators for python 3
 
 **Freely based** on [WTF-Forms](https://github.com/wtforms/wtforms) validators.
 
+.. warning::
+
+    Be aware about incompatible changes on :ref:`Version 0.6.0`.
+
 ********
 Features
 ********
@@ -26,10 +30,39 @@ Features
 - Dirty model integration (https://github.com/alfred82santa/dirty-models)
 - No database dependent.
 - Asynchronous validators.
+- Stateless validators.
+- Deferred validators.
 
 *********
 Changelog
 *********
+
+-------------
+Version 0.6.0
+-------------
+
+The stateless refactor. Dirty validators now are full stateless.
+It means now there is no messages on validator instance. The ``is_valid`` method returns
+a validation context. It is evaluated as ``True`` if there were no errors and false
+otherwise. So, it is possible to still to use checks like ``if validator.is_valid(my_data):``
+but we recomend to use the Walruf operator (https://peps.python.org/pep-0572/):
+``if result := validator.is_valid(my_data):``.
+That is important because messages are stored on context.
+
+.. code-block:: python
+    # Python +3.8
+    if result := validator.is_valid(my_data):
+        # some code
+    else:
+        print(result.error_messages)
+
+    #or
+
+    if not (result := validator.is_valid(my_data)):
+        print(result.error_messages)
+
+On the other hand, validation error messages now are an object. It stores error code, error message
+template and context values.
 
 -------------
 Version 0.5.4
