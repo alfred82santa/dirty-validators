@@ -17,7 +17,7 @@ Agnostic validators for python 3
 
 .. warning::
 
-    Be aware about incompatible changes on :ref:`Version 0.6.0`.
+    Be aware about incompatible changes on `Version 0.6.0`_.
 
 ********
 Features
@@ -50,6 +50,7 @@ but we recomend to use the Walruf operator (https://peps.python.org/pep-0572/):
 That is important because messages are stored on context.
 
 .. code-block:: python
+
     # Python +3.8
     if result := validator.is_valid(my_data):
         # some code
@@ -62,7 +63,14 @@ That is important because messages are stored on context.
         print(result.error_messages)
 
 On the other hand, validation error messages now are an object. It stores error code, error message
-template and context values.
+template and context values. There is a helper function ``from_context_to_legacy_message`` in order
+to convert a context to legacy message format.
+
+- Stateless refactor
+- New ``Context`` class stores state of validation process.
+- New ``ValidationErrorMessage`` class to store validation error messages.
+- New ``Deferred`` validator in order to build validator on runtime depending on context.
+- New ``from_context_to_legacy_message`` helper.
 
 -------------
 Version 0.5.4
