@@ -126,3 +126,6 @@ increase-version.%:
 
 get-version:
 	@python3 setup_utils.py get-version
+
+check-setup:
+	@python3 setup.py check -r -s
