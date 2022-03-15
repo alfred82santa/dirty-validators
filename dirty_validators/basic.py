@@ -2,7 +2,9 @@
 Validators library
 """
 import re
-from string import Template
+from typing import Any
+
+from .ctx import Context
 
 
 class ValidatorMetaclass(type):
@@ -54,10 +56,10 @@ class BaseValidator(metaclass=ValidatorMetaclass):
     error_code_map = {}
     error_messages = {}
     message_values = {}
-    hidden_value = '**Hidden**'
+    hidden_value = '**hidden**'
 
     def __init__(self, error_code_map=None, error_messages=None,
-                 message_values=None, hidden=False, *args, **kwargs):
+                 message_values=None, hide_value=False, *args, **kwargs):
         """
         :param error_code_map: Map of orginial error codes to custom error codes
         :rparam error_code_map: dict
@@ -79,38 +81,46 @@ class BaseValidator(metaclass=ValidatorMetaclass):
         if message_values:
             self.message_values.update(message_values)
 
-        self.messages = {}
-        self.hidden = hidden
+        self.hide_value = hide_value
 
-    def error(self, error_code, value, **kwargs):
+    def error(self, error_code, value: Any = None, *args, ctx: 'Context', **kwargs):
         """
         Helper to add error to messages field. It fills placeholder with extra call parameters
         or values from message_value map.
 
+        :param ctx: Validation context
         :param error_code: Error code to use
         :rparam error_code: str
-        :param value: Value checked
+        :param value: [DEPRECATED] Value checked
         :param kwargs: Map of values to use in placeholders
         """
         code = self.error_code_map.get(error_code, error_code)
 
         try:
-            message = Template(self.error_messages[code])
+            msg_tpl = self.error_messages[code]
         except KeyError:
-            message = Template(self.error_messages[error_code])
+            msg_tpl = self.error_messages[error_code]
 
-        placeholders = {"value": self.hidden_value if self.hidden else value}
-        placeholders.update(kwargs)
-        placeholders.update(self.message_values)
+        ctx.error(error_code=code,
+                  error_message_tpl=msg_tpl,
+                  **kwargs)
 
-        self.messages[code] = message.safe_substitute(placeholders)
+    def _build_context(self, value, *args, parent_ctx: 'Context' = None, **kwargs):
+        return Context(value=value,
+                       parent=parent_ctx,
+                       hidden_value=self.hidden_value,
+                       hide_value=self.hide_value,
+                       **self.message_values)
 
-    def is_valid(self, value, *args, **kwargs):
-        self.messages = {}
-        return self._internal_is_valid(value, *args, **kwargs)
+    def is_valid(self, value, *args, parent_ctx: 'Context' = None, **kwargs) -> 'Context':
+        ctx = self._build_context(value, *args, parent_ctx=parent_ctx, **kwargs)
 
-    def _internal_is_valid(self, value, *args, **kwargs):
-        return True
+        self._internal_is_valid(value, *args, ctx=ctx, **kwargs)
+
+        return ctx
+
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
+        return ctx
 
 
 class EqualTo(BaseValidator):
@@ -129,11 +139,10 @@ class EqualTo(BaseValidator):
         self.comp_value = comp_value
         self.message_values.update({'comp_value': self.comp_value})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value != self.comp_value:
-            self.error(self.NOT_EQUAL, value)
-            return False
-        return True
+            self.error(self.NOT_EQUAL, value, ctx=ctx)
+        return ctx
 
 
 class NotEqualTo(BaseValidator):
@@ -152,11 +161,10 @@ class NotEqualTo(BaseValidator):
         self.comp_value = comp_value
         self.message_values.update({'comp_value': self.comp_value})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value == self.comp_value:
-            self.error(self.IS_EQUAL, value)
-            return False
-        return True
+            self.error(self.IS_EQUAL, value, ctx=ctx)
+        return ctx
 
 
 class StringNotContaining(BaseValidator):
@@ -177,13 +185,13 @@ class StringNotContaining(BaseValidator):
         self.case_sensitive = case_sensitive
         self.message_values.update({'token': self.token})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if (not self.case_sensitive and (self.token.lower() not in value.lower())) or \
                 (self.case_sensitive and (self.token not in value)):
-            return True
+            return ctx
 
-        self.error(self.NOT_CONTAINS, value)
-        return False
+        self.error(self.NOT_CONTAINS, value, ctx=ctx)
+        return ctx
 
 
 class Length(BaseValidator):
@@ -209,27 +217,25 @@ class Length(BaseValidator):
     }
 
     def __init__(self, min=-1, max=-1, *args, **kwargs):
-        super(Length, self).__init__(*args, **kwargs)
         assert min != -1 or max != -1, 'At least one of `min` or `max` must be specified.'
         assert max == -1 or min <= max, '`min` cannot be more than `max`.'
+
+        super(Length, self).__init__(*args, **kwargs)
         self.min = min
         self.max = max
 
         self.message_values.update({"min": self.min, "max": self.max})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         try:
             length = len(value) or 0
             if length < self.min:
-                self.error(self.TOO_SHORT, value)
-                return False
-            if self.max != -1 and length > self.max:
-                self.error(self.TOO_LONG, value)
-                return False
-            return True
+                self.error(self.TOO_SHORT, value, ctx=ctx)
+            elif self.max != -1 and length > self.max:
+                self.error(self.TOO_LONG, value, ctx=ctx)
         except TypeError:
-            self.error(self.INVALID_TYPE, value)
-            return False
+            self.error(self.INVALID_TYPE, value, ctx=ctx)
+        return ctx
 
 
 class NumberRange(BaseValidator):
@@ -259,12 +265,11 @@ class NumberRange(BaseValidator):
 
         self.message_values.update({"min": self.min, "max": self.max})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value is None or (self.min is not None and value < self.min) or \
                 (self.max is not None and value > self.max):
-            self.error(self.OUT_OF_RANGE, value)
-            return False
-        return True
+            self.error(self.OUT_OF_RANGE, value, ctx=ctx)
+        return ctx
 
 
 class Regexp(BaseValidator):
@@ -293,14 +298,13 @@ class Regexp(BaseValidator):
 
         self.message_values.update({"regex": self.regex.pattern})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         try:
             if not self.regex.match(value or ''):
-                self.error(self.NOT_MATCH, value)
-                return False
-            return True
+                self.error(self.NOT_MATCH, value, ctx=ctx)
         except TypeError:
-            self.error(self.NOT_MATCH, value)
+            self.error(self.NOT_MATCH, value, ctx=ctx)
+        return ctx
 
 
 class Email(Regexp):
@@ -347,21 +351,19 @@ class IPAddress(BaseValidator):
 
         self.message_values.update({'types': ' and '.join([x for x in ('ipv4', 'ipv6') if getattr(self, x)])})
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if self.check_ipv4(value):
             if not self.ipv4:
-                self.error(self.IPV4_NOT_ALLOWED, value)
-                return False
-            return True
+                self.error(self.IPV4_NOT_ALLOWED, value, ctx=ctx)
+            return ctx
 
-        if self.check_ipv6(value):
+        elif self.check_ipv6(value):
             if not self.ipv6:
-                self.error(self.IPV6_NOT_ALLOWED, value)
-                return False
-            return True
+                self.error(self.IPV6_NOT_ALLOWED, value, ctx=ctx)
+            return ctx
 
-        self.error(self.NOT_IP_ADDRESS, value)
-        return False
+        self.error(self.NOT_IP_ADDRESS, value, ctx=ctx)
+        return ctx
 
     def check_ipv4(self, value):
         try:
@@ -371,7 +373,7 @@ class IPAddress(BaseValidator):
 
         if len(parts) == 4 and all(x.isdigit() for x in parts):
             numbers = list(int(x) for x in parts)
-            return all(num >= 0 and num < 256 for num in numbers)
+            return all(0 <= num < 256 for num in numbers)
         return False
 
     def check_ipv6(self, value):
@@ -435,8 +437,25 @@ class URL(Regexp):
 
     def __init__(self, require_tld=True, *args, **kwargs):
         tld_part = (require_tld and r'\.[a-z]{2,10}' or '')
-        regex = r'^[a-z]+://([^/:]+%s|([0-9]{1,3}\.){3}[0-9]{1,3})(:[0-9]+)?(\/.*)?$' % tld_part
+        regex = r'^[a-z]+([:+\-]?[a-z0-9]+)*://([^/:]+%s|([0-9]{1,3}\.){3}[0-9]{1,3})(:[0-9]+)?(\/.*)?$' % tld_part
         super(URL, self).__init__(regex, re.IGNORECASE, *args, **kwargs)
+
+
+class URI(Regexp):
+    """
+    Simple regexp based uri validation. Much like the email validator, you
+    probably want to validate the url later by other means if the url must
+    resolve.
+    """
+
+    INVALID_URI = 'invalidUri'
+
+    error_code_map = {Regexp.NOT_MATCH: INVALID_URI}
+    error_messages = {INVALID_URI: "'$value' is not a valid uri."}
+
+    def __init__(self, require_tld=True, *args, **kwargs):
+        regex = r'^[a-z]+([:+\-]?[a-z0-9]+)*:(//(([^/:]+%s|([0-9]{1,3}\.){3}[0-9]{1,3})(:[0-9]+)?)?)?(\/.*)?$'
+        super(URI, self).__init__(regex, re.IGNORECASE, *args, **kwargs)
 
 
 class UUID(Regexp):
@@ -473,11 +492,10 @@ class AnyOf(BaseValidator):
             values_formatter = self.default_values_formatter
         self.values_formatter = values_formatter
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value not in self.values:
-            self.error(self.NOT_IN_LIST, value, values=self.values_formatter(self.values))
-            return False
-        return True
+            self.error(self.NOT_IN_LIST, value, values=self.values_formatter(self.values), ctx=ctx)
+        return ctx
 
     @staticmethod
     def default_values_formatter(values):
@@ -505,11 +523,10 @@ class NoneOf(BaseValidator):
             def values_formatter(v): return ', '.join(str(x) if not isinstance(x, str) else "'%s'" % x for x in values)
         self.values_formatter = values_formatter
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value in self.values:
-            self.error(self.IN_LIST, value, values=self.values_formatter(self.values))
-            return False
-        return True
+            self.error(self.IN_LIST, value, values=self.values_formatter(self.values), ctx=ctx)
+        return ctx
 
 
 class IsEmpty(BaseValidator):
@@ -520,11 +537,10 @@ class IsEmpty(BaseValidator):
 
     error_messages = {EMPTY: "'$value' must be empty"}
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value:
-            self.error(self.EMPTY, value)
-            return False
-        return True
+            self.error(self.EMPTY, value, ctx=ctx)
+        return ctx
 
 
 class NotEmpty(BaseValidator):
@@ -535,11 +551,10 @@ class NotEmpty(BaseValidator):
 
     error_messages = {NOT_EMPTY: "Value can not be empty"}
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if not value:
-            self.error(self.NOT_EMPTY, value)
-            return False
-        return True
+            self.error(self.NOT_EMPTY, value, ctx=ctx)
+        return ctx
 
 
 class NotEmptyString(NotEmpty):
@@ -554,12 +569,12 @@ class NotEmptyString(NotEmpty):
         NOT_STRING: "Value must be a string"
     }
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if not isinstance(value, str):
-            self.error(self.NOT_STRING, value)
-            return False
+            self.error(self.NOT_STRING, value, ctx=ctx)
+            return ctx
 
-        return super(NotEmptyString, self)._internal_is_valid(value.strip(), args, kwargs)
+        return super(NotEmptyString, self)._internal_is_valid(value.strip(), args, ctx=ctx, **kwargs)
 
 
 class IsNone(BaseValidator):
@@ -571,11 +586,10 @@ class IsNone(BaseValidator):
 
     error_messages = {NONE: "'$value' must be None"}
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value is not None:
-            self.error(self.NONE, value)
-            return False
-        return True
+            self.error(self.NONE, value, ctx=ctx)
+        return ctx
 
 
 class NotNone(BaseValidator):
@@ -587,8 +601,7 @@ class NotNone(BaseValidator):
 
     error_messages = {NOT_NONE: "Value must not be None"}
 
-    def _internal_is_valid(self, value, *args, **kwargs):
+    def _internal_is_valid(self, value, *args, ctx: 'Context', **kwargs) -> 'Context':
         if value is None:
-            self.error(self.NOT_NONE, value)
-            return False
-        return True
+            self.error(self.NOT_NONE, value, ctx=ctx)
+        return ctx
